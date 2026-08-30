@@ -1,0 +1,44 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+.claude/
+.opencode/
+.ai/
+.playwright-mcp/
+.sisyphus/
+~/
+.git.backup*/
+.firebase/
+.firebaserc
+
+# Local app/runtime data
+data/
+data.json
+chroma/
+*.sqlite
+*.sqlite3
+*.db
+
+# Local debug artifacts
+playwright-trace*.zip
+test-results/
+playwright-report/
+login-debug.png
+divs.txt
+
+# Deployment keys and secrets
+*.pem
+*.key
+*serviceAccount*.json
+config/firebase-applet-config.json
+opensynapse-deploy.tar.gz
+
+# Temporary deployment files
+nginx-opensynapse.conf
+setup-nginx.sh
+deploy-opensynapse.sh

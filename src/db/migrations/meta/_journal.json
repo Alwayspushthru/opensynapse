@@ -1,0 +1,34 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1774712191199,
+      "tag": "0000_gifted_madame_web",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1774728215186,
+      "tag": "0001_swift_magus",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1774783490778,
+      "tag": "0002_add_session_ip_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1775160971084,
+      "tag": "0003_nebulous_hydra",
+      "breakpoints": true
+    }
+  ]
+}
