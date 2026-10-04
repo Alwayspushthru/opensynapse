@@ -1,6 +1,7 @@
+import { AI_PROVIDER_IDS, type AIProviderId } from '../lib/aiModels';
 import { apiKeyRepo } from '../repositories/apiKey.repo';
 
-type ApiKeyProvider = 'gemini' | 'openai' | 'openrouter' | 'nvidia' | 'minimax' | 'zhipu' | 'moonshot';
+type ApiKeyProvider = AIProviderId;
 
 export interface ProviderApiKeyConfig {
   apiKey: string;
@@ -8,7 +9,7 @@ export interface ProviderApiKeyConfig {
 }
 
 function parseProvider(provider: string): ApiKeyProvider {
-  const providers: ApiKeyProvider[] = ['gemini', 'openai', 'openrouter', 'nvidia', 'minimax', 'zhipu', 'moonshot'];
+  const providers = AI_PROVIDER_IDS;
   if (!providers.includes(provider as ApiKeyProvider)) {
     throw new Error(`不支持的 Provider：${provider}`);
   }

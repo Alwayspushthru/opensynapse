@@ -160,9 +160,9 @@ export const apiKeysApi = {
   async get(): Promise<{
     geminiApiKey?: string;
     openaiApiKey?: string;
-    minimaxApiKey?: string;
+    qwenApiKey?: string;
     zhipuApiKey?: string;
-    moonshotApiKey?: string;
+    deepseekApiKey?: string;
   }> {
     return fetchWithAuth(`${API_BASE}/api-keys`);
   },
@@ -170,9 +170,9 @@ export const apiKeysApi = {
   async update(keys: {
     geminiApiKey?: string;
     openaiApiKey?: string;
-    minimaxApiKey?: string;
+    qwenApiKey?: string;
     zhipuApiKey?: string;
-    moonshotApiKey?: string;
+    deepseekApiKey?: string;
   }): Promise<void> {
     return fetchWithAuth(`${API_BASE}/api-keys`, {
       method: "PUT",

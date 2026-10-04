@@ -34,12 +34,12 @@ export interface AccountSecret {
   geminiApiKey?: string;
   openaiApiKey?: string;
   openaiBaseUrl?: string;
-  minimaxApiKey?: string;
-  minimaxBaseUrl?: string;
+  qwenApiKey?: string;
+  qwenBaseUrl?: string;
   zhipuApiKey?: string;
   zhipuBaseUrl?: string;
-  moonshotApiKey?: string;
-  moonshotBaseUrl?: string;
+  deepseekApiKey?: string;
+  deepseekBaseUrl?: string;
   providerTokens?: {
     wechat?: {
       accessToken?: string;

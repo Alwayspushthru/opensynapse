@@ -263,46 +263,11 @@ async function callZhipuOcr(imageBase64: string): Promise<string> {
   }
 }
 
-/**
- * 对于非 vision 模型，使用 OCR 提取图片内容并附加到消息中
- */
-/**
- * 调用 MiniMax 图片理解 API
- * 使用 Token Plan 的 understand_image 工具
- */
-async function callMiniMaxVision(imageBase64: string, prompt?: string): Promise<string> {
-  try {
-    const response = await fetch('/api/ai/vision/minimax', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        imageBase64,
-        prompt: prompt || '请详细描述这张图片的内容',
-      }),
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      // 如果需要 Token Plan 或失败，返回空字符串让上层处理
-      if (error.fallback === 'ocr') {
-        console.warn('[MiniMax Vision] Token Plan required, falling back to OCR if available');
-      }
-      throw new Error(error.message || error.error || 'Vision request failed');
-    }
-
-    const result = await response.json();
-    return result.description || result.text || '';
-  } catch (error) {
-    console.error('[MiniMax Vision] 提取失败:', error);
-    return '';
-  }
-}
-
 async function extractImagesWithOcr(messages: ChatMessage[], modelId: string): Promise<ChatMessage[]> {
   const parsed = parseModelSelection(modelId);
   
-  // 支持智谱 OCR 和 MiniMax 图片理解
-  if (parsed.provider !== 'zhipu' && parsed.provider !== 'minimax') {
+  // 文本 GLM 模型可使用同厂商 OCR
+  if (parsed.provider !== 'zhipu') {
     return messages;
   }
 
@@ -310,18 +275,8 @@ async function extractImagesWithOcr(messages: ChatMessage[], modelId: string): P
   
   for (const message of messages) {
     if (message.role === 'user' && message.image) {
-      let extractedContent = '';
-      
-      if (parsed.provider === 'minimax') {
-        // 尝试 MiniMax 图片理解
-        extractedContent = await callMiniMaxVision(message.image, message.text);
-      }
-      
-      // MiniMax 失败或未提取到内容，尝试 OCR（智谱 OCR 对中文更好）
-      if (!extractedContent) {
-        extractedContent = await callZhipuOcr(message.image);
-      }
-      
+      const extractedContent = await callZhipuOcr(message.image);
+
       if (extractedContent) {
         processedMessages.push({
           ...message,
@@ -872,7 +827,7 @@ export async function semanticSearch(query: string, notes: Note[]): Promise<{ no
 }
 
 function cosineSimilarity(vecA: number[], vecB: number[]): number {
-  if (vecA.length === 0 || vecB.length === 0) return 0;
+  if (vecA.length === 0 || vecA.length !== vecB.length) return 0;
   let dotProduct = 0;
   let normA = 0;
   let normB = 0;

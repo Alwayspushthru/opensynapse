@@ -27,6 +27,8 @@ import {
 import {
   AI_MODEL_OPTIONS,
   AI_PROVIDERS,
+  AI_PROVIDER_IDS,
+  PROVIDER_ENV_KEY,
   EMBEDDING_MODEL_OPTIONS,
   getPreferredEmbeddingModel,
   getPreferredStructuredModel,
@@ -55,77 +57,17 @@ type ProviderStatus = {
   valuePreview: string;
 };
 
-type OpenAIOAuthStatus = {
-  configured: boolean;
-  source: 'opensynapse' | 'codex' | null;
-  email: string | null;
-  accountId: string | null;
-  expiresAt: number | null;
-  planType: string | null;
-  loginStatus: 'idle' | 'pending' | 'success' | 'error';
-  authUrl: string | null;
-  error: string | null;
-  completedAt: number | null;
-};
-
-const PROVIDER_SETTINGS = [
-  {
-    providerId: 'gemini' as const,
-    title: 'Google Gemini',
-    envVar: 'GEMINI_API_KEY',
-    baseUrlEnvVar: null,
-    placeholder: 'AIza...',
-    description: '仅在你不想使用 Gemini CLI / Code Assist OAuth 时需要。',
-  },
-  {
-    providerId: 'openai' as const,
-    title: 'OpenAI',
-    envVar: 'OPENAI_API_KEY',
-    baseUrlEnvVar: 'OPENAI_BASE_URL',
-    placeholder: 'sk-...',
-    description: '支持 Codex OAuth 或 API key。Codex OAuth 更适合个人开发，API key 更适合稳定生产调用。',
-  },
-  {
-    providerId: 'openrouter' as const,
-    title: 'OpenRouter',
-    envVar: 'OPENROUTER_API_KEY',
-    baseUrlEnvVar: 'OPENROUTER_BASE_URL',
-    placeholder: 'sk-or-...',
-    description: '聚合多模型平台，包含 DeepSeek、Qwen 等免费模型。',
-  },
-  {
-    providerId: 'nvidia' as const,
-    title: 'NVIDIA NIM',
-    envVar: 'NVIDIA_API_KEY',
-    baseUrlEnvVar: 'NVIDIA_BASE_URL',
-    placeholder: 'nvapi-...',
-    description: 'NVIDIA NIM 平台，提供 DeepSeek、Qwen 等免费模型。',
-  },
-  {
-    providerId: 'minimax' as const,
-    title: 'MiniMax',
-    envVar: 'MINIMAX_API_KEY',
-    baseUrlEnvVar: 'MINIMAX_BASE_URL',
-    placeholder: 'your-minimax-key',
-    description: '用于 MiniMax M2.5 系列模型。',
-  },
-  {
-    providerId: 'zhipu' as const,
-    title: 'Zhipu GLM',
-    envVar: 'ZHIPU_API_KEY',
-    baseUrlEnvVar: 'ZHIPU_BASE_URL',
-    placeholder: 'your-zhipu-key',
-    description: '用于 GLM 系列模型。当前默认上游使用你指定的智谱 Anthropic 兼容地址。',
-  },
-  {
-    providerId: 'moonshot' as const,
-    title: 'Moonshot Kimi',
-    envVar: 'MOONSHOT_API_KEY',
-    baseUrlEnvVar: 'MOONSHOT_BASE_URL',
-    placeholder: 'sk-...',
-    description: '用于 Kimi K2 系列模型。当前默认上游按你的要求使用 Kimi Coding 网关。',
-  },
-];
+const PROVIDER_SETTINGS = AI_PROVIDER_IDS.map(providerId => {
+  const provider = AI_PROVIDERS[providerId];
+  return {
+    providerId, title: provider.label, envVar: provider.apiKeyEnvVar,
+    baseUrlEnvVar: provider.baseUrlEnvVar || null, placeholder: '填写官方 API Key',
+    description: providerId === 'deepseek' ? '默认聊天和知识提炼使用 DeepSeek，配置这一家即可开始。'
+      : providerId === 'qwen' ? '使用阿里云百炼 API Key，Base URL 须与业务空间所在地域一致。'
+      : providerId === 'gemini' ? '推荐官方 API Key；CLI OAuth 的模型可用范围可能不同。'
+      : '使用官方 API Key 直连。',
+  };
+});
 
 const LOCAL_CONFIG_KEYS = new Set(
   PROVIDER_SETTINGS.flatMap((item) => [
@@ -150,7 +92,6 @@ export default function SettingsView({
   user
 }: SettingsViewProps) {
   const [providerStatus, setProviderStatus] = useState<Record<string, ProviderStatus>>({});
-  const [openAIOAuthStatus, setOpenAIOAuthStatus] = useState<OpenAIOAuthStatus | null>(null);
   const [geminiOAuthStatus, setGeminiOAuthStatus] = useState<{ configured: boolean; email: string | null } | null>(null);
   const [draftValues, setDraftValues] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
@@ -189,25 +130,11 @@ export default function SettingsView({
       return geminiKeyConfigured || geminiOAuthConfigured || false;
     }
 
-    if (providerId === 'openai') {
-      const openaiKeyConfigured = providerStatus['OPENAI_API_KEY']?.configured;
-      const openaiOAuthConfigured = openAIOAuthStatus?.configured;
-      return openaiKeyConfigured || openaiOAuthConfigured || false;
-    }
-
-    const envVarMap: Record<string, string> = {
-      'openrouter': 'OPENROUTER_API_KEY',
-      'nvidia': 'NVIDIA_API_KEY',
-      'minimax': 'MINIMAX_API_KEY',
-      'zhipu': 'ZHIPU_API_KEY',
-      'moonshot': 'MOONSHOT_API_KEY',
-    };
-
-    const envVar = envVarMap[providerId];
+    const envVar = PROVIDER_ENV_KEY[providerId];
     if (!envVar) return false;
 
     return providerStatus[envVar]?.configured || false;
-  }, [providerStatus, openAIOAuthStatus, geminiOAuthStatus, userApiKeys]);
+  }, [providerStatus, geminiOAuthStatus, userApiKeys]);
 
   const structuredModelOptions = useMemo(
     () => AI_MODEL_OPTIONS.filter((option) => {
@@ -261,17 +188,13 @@ export default function SettingsView({
     setIsLoading(true);
     setError(null);
     try {
-      const [providerResponse, openAIOAuthResponse, geminiOAuthResponse] = await Promise.all([
+      const [providerResponse, geminiOAuthResponse] = await Promise.all([
         fetch('/api/local-config/providers'),
-        fetch('/api/local-config/openai-oauth/status'),
         fetch('/api/local-config/gemini-oauth/status'),
       ]);
 
       if (!providerResponse.ok) {
         throw new Error(await providerResponse.text());
-      }
-      if (!openAIOAuthResponse.ok) {
-        throw new Error(await openAIOAuthResponse.text());
       }
       if (!geminiOAuthResponse.ok) {
         throw new Error(await geminiOAuthResponse.text());
@@ -282,7 +205,6 @@ export default function SettingsView({
         (providerPayload.providers as ProviderStatus[]).map((item) => [item.key, item])
       );
       setProviderStatus(nextStatus);
-      setOpenAIOAuthStatus(await openAIOAuthResponse.json());
       setGeminiOAuthStatus(await geminiOAuthResponse.json());
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -313,20 +235,6 @@ export default function SettingsView({
       void loadUserApiKeys();
     }
   }, [user, loadUserApiKeys]);
-
-  useEffect(() => {
-    if (openAIOAuthStatus?.loginStatus !== 'pending') {
-      return;
-    }
-
-    const timer = window.setInterval(() => {
-      void loadStatus();
-    }, 1500);
-
-    return () => {
-      window.clearInterval(timer);
-    };
-  }, [loadStatus, openAIOAuthStatus?.loginStatus]);
 
   const handleSave = async () => {
     const updates = Object.fromEntries(
@@ -389,7 +297,7 @@ export default function SettingsView({
     }
   };
 
-  const handleSaveUserApiKey = async (provider: string, apiKey: string, baseUrl?: string) => {
+  const handleSaveUserApiKey = async (provider: string, apiKey: string) => {
     if (!user) {
       setError('请先登录后再保存个人 API Key');
       return;
@@ -398,7 +306,7 @@ export default function SettingsView({
     setFeedback(null);
     setError(null);
     try {
-      await saveUserApiKey(provider, apiKey, baseUrl);
+      await saveUserApiKey(provider, apiKey);
       setFeedback(`${provider} 个人 API Key 已保存`);
       setDraftValues((prev) => {
         const next = { ...prev };
@@ -430,87 +338,6 @@ export default function SettingsView({
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setIsSavingUserKey(null);
-    }
-  };
-
-  const handleOpenAIOAuthLogin = async () => {
-    const popup = window.open('about:blank', '_blank', 'popup=yes,width=520,height=720');
-    if (popup) {
-      popup.document.title = 'OpenAI OAuth';
-      popup.document.body.innerHTML = `
-        <div style="min-height:100vh;display:grid;place-items:center;background:#0d0d0d;color:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-          <div style="width:min(24rem,calc(100vw - 2rem));padding:2rem;border-radius:1.5rem;background:#171717;border:1px solid rgba(255,255,255,0.08);text-align:center;box-shadow:0 24px 48px rgba(0,0,0,0.35);">
-            <div style="width:3.5rem;height:3.5rem;margin:0 auto 1rem;border-radius:1rem;display:grid;place-items:center;background:linear-gradient(135deg,#10a37f,#1c7f6a);font-size:1.5rem;font-weight:800;">O</div>
-            <h1 style="margin:0 0 0.75rem;font-size:1.5rem;font-weight:800;">正在打开 OpenAI 授权页</h1>
-            <p style="margin:0;line-height:1.6;color:rgba(255,255,255,0.72);">如果几秒后仍未跳转，请关闭此窗口后重试，或使用设置页里的备用授权链接。</p>
-          </div>
-        </div>
-      `;
-    }
-    setIsSaving(true);
-    setFeedback(null);
-    setError(null);
-    try {
-      const response = await fetch('/api/local-config/openai-oauth/login', {
-        method: 'POST',
-      });
-      const payload = await response.json();
-      if (!response.ok) {
-        throw new Error(payload?.error || 'OpenAI OAuth login failed.');
-      }
-
-      if (payload?.authUrl) {
-        if (popup) {
-          popup.location.replace(payload.authUrl);
-        } else {
-          window.open(payload.authUrl, '_blank', 'noopener,noreferrer');
-        }
-        setFeedback('OpenAI 授权页已打开。完成浏览器登录后，设置页会自动刷新状态。');
-      } else {
-        popup?.close();
-        throw new Error('未收到 OpenAI 授权地址，请重试。');
-      }
-
-      await loadStatus();
-    } catch (err) {
-      const nextError = err instanceof Error ? err.message : String(err);
-      if (popup && !popup.closed) {
-        popup.document.title = 'OpenAI OAuth 打开失败';
-        popup.document.body.innerHTML = `
-          <div style="min-height:100vh;display:grid;place-items:center;background:#0d0d0d;color:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-            <div style="width:min(24rem,calc(100vw - 2rem));padding:2rem;border-radius:1.5rem;background:#171717;border:1px solid rgba(255,255,255,0.08);text-align:center;box-shadow:0 24px 48px rgba(0,0,0,0.35);">
-              <div style="width:3.5rem;height:3.5rem;margin:0 auto 1rem;border-radius:1rem;display:grid;place-items:center;background:linear-gradient(135deg,#ef4444,#b91c1c);font-size:1.5rem;font-weight:800;">!</div>
-              <h1 style="margin:0 0 0.75rem;font-size:1.5rem;font-weight:800;">无法打开 OpenAI 授权页</h1>
-              <p style="margin:0;line-height:1.6;color:rgba(255,255,255,0.72);">${nextError}</p>
-            </div>
-          </div>
-        `;
-      }
-      setError(nextError);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleOpenAIOAuthLogout = async () => {
-    setIsSaving(true);
-    setFeedback(null);
-    setError(null);
-    try {
-      const response = await fetch('/api/local-config/openai-oauth/logout', {
-        method: 'POST',
-      });
-      const payload = await response.json();
-      if (!response.ok) {
-        throw new Error(payload?.error || 'OpenAI OAuth logout failed.');
-      }
-
-      setFeedback(payload?.message || 'OpenAI OAuth 已退出。');
-      await loadStatus();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setIsSaving(false);
     }
   };
 
@@ -749,8 +576,7 @@ export default function SettingsView({
             <p className="text-[10px] uppercase tracking-[0.28em] text-text-muted font-bold mb-2">Settings</p>
             <h2 className="text-3xl font-black tracking-tight">模型与密钥设置</h2>
             <p className="text-text-sub mt-2 max-w-2xl leading-relaxed">
-              这里管理本地开发环境的 provider 凭证。Gemini 优先支持 Gemini CLI / Code Assist OAuth；
-              OpenAI 支持 Codex OAuth 或 API key；其他 provider 继续走 API key。
+              只需配置实际使用的厂商。默认使用 DeepSeek；其余厂商可在需要时添加官方 API Key。
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -819,69 +645,6 @@ export default function SettingsView({
         </div>
 
         <div className="rounded-3xl border border-border-main bg-card p-6 shadow-sm">
-          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-            <div className="space-y-2">
-              <div className="flex flex-wrap items-center gap-3">
-                <ShieldCheck className="w-5 h-5 text-accent" />
-                <h3 className="font-bold text-lg">OpenAI Codex OAuth</h3>
-                {openAIOAuthStatus?.configured ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-3 py-1 text-xs font-bold text-green-400">
-                    <CheckCircle2 size={12} />
-                    已登录
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-white/5 px-3 py-1 text-xs font-bold text-text-muted">
-                    <CircleOff size={12} />
-                    未登录
-                  </span>
-                )}
-              </div>
-              {openAIOAuthStatus?.email && (
-                <div className="text-xs text-text-muted">
-                  当前账号：<code>{openAIOAuthStatus.email}</code>
-                  {openAIOAuthStatus.planType ? ` · 计划：${openAIOAuthStatus.planType}` : ''}
-                </div>
-              )}
-              {openAIOAuthStatus?.expiresAt && (
-                <div className="text-xs text-text-muted">
-                  Access Token 有效至：{new Date(openAIOAuthStatus.expiresAt).toLocaleString()}
-                </div>
-              )}
-              {openAIOAuthStatus?.loginStatus === 'pending' && openAIOAuthStatus.authUrl && (
-                <a
-                  href={openAIOAuthStatus.authUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 text-xs font-bold text-accent hover:text-accent-hover transition-colors"
-                >
-                  如果浏览器没有自动打开，点这里继续授权
-                  <ExternalLink size={12} />
-                </a>
-              )}
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                onClick={handleOpenAIOAuthLogin}
-                disabled={isSaving || openAIOAuthStatus?.loginStatus === 'pending'}
-                className="inline-flex items-center gap-2 rounded-full bg-accent px-4 py-2 text-sm font-bold text-white shadow-lg shadow-accent/20 transition-all hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <LogIn className="w-4 h-4" />
-                {openAIOAuthStatus?.configured ? '重新登录' : '登录 OpenAI'}
-              </button>
-              <button
-                onClick={handleOpenAIOAuthLogout}
-                disabled={isSaving}
-                className="inline-flex items-center gap-2 rounded-full bg-tertiary px-4 py-2 text-sm font-bold text-text-main hover:bg-secondary transition-colors disabled:opacity-50"
-              >
-                <LogOut className="w-4 h-4" />
-                退出
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-3xl border border-border-main bg-card p-6 shadow-sm">
           <div className="flex items-center gap-3 mb-3">
             <BrainCircuit className="w-5 h-5 text-accent" />
             <h3 className="font-bold text-lg">知识提炼模型</h3>
@@ -925,8 +688,8 @@ export default function SettingsView({
             <h3 className="font-bold text-lg">Embedding 通道</h3>
           </div>
           <p className="text-sm text-text-sub leading-relaxed mb-4">
-          语义搜索、知识链接和 RAG 的向量生成与聊天模型解耦。支持 Gemini、OpenAI、智谱等多个 embedding 提供商。
-          你可以继续使用 GLM / Kimi / GPT 聊天，同时选择任意有 API Key 的提供商作为 embedding 后端。
+          语义搜索、知识链接和 RAG 的向量生成与聊天模型解耦。当前预置 OpenAI、智谱 embedding 模型。
+          你可以使用 DeepSeek / Qwen / GLM / GPT 聊天，同时选择任意有 API Key 的提供商作为 embedding 后端。
           </p>
 
           <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
@@ -1079,7 +842,7 @@ export default function SettingsView({
                 const hasEnvKey = envStatus?.configured ?? false;
                 const isActiveKey = hasUserKey ? 'personal' : hasEnvKey ? 'global' : 'none';
                 const draftKey = draftValues[`${item.providerId}_key`] || '';
-                const draftBaseUrl = draftValues[`${item.providerId}_baseUrl`] || '';
+
 
                 return (
                   <div key={item.providerId} className="rounded-2xl border border-border-main bg-secondary/30 p-5">
@@ -1131,18 +894,6 @@ export default function SettingsView({
                           disabled={isSavingUserKey === item.providerId}
                           className="w-full rounded-2xl border border-border-main bg-secondary px-4 py-3 text-sm text-text-main placeholder:text-text-muted/40 outline-none focus:border-accent/40 disabled:opacity-50"
                         />
-                        {item.baseUrlEnvVar && (
-                          <input
-                            type="text"
-                            value={draftBaseUrl}
-                            onChange={(e) =>
-                              setDraftValues((prev) => ({ ...prev, [`${item.providerId}_baseUrl`]: e.target.value }))
-                            }
-                            placeholder={`自定义上游地址 (默认: ${provider.baseUrl || '官方'})`}
-                            disabled={isSavingUserKey === item.providerId}
-                            className="w-full rounded-2xl border border-border-main bg-secondary px-4 py-3 text-sm text-text-main placeholder:text-text-muted/40 outline-none focus:border-accent/40 disabled:opacity-50"
-                          />
-                        )}
                         <div className="flex items-center justify-end gap-2">
                           {hasUserKey && (
                             <button
@@ -1158,7 +909,7 @@ export default function SettingsView({
                             </button>
                           )}
                           <button
-                            onClick={() => void handleSaveUserApiKey(item.providerId, draftKey, draftBaseUrl || undefined)}
+                            onClick={() => void handleSaveUserApiKey(item.providerId, draftKey)}
                             disabled={isSavingUserKey === item.providerId || !draftKey.trim()}
                             className="inline-flex items-center gap-2 rounded-full bg-accent px-4 py-2 text-sm font-bold text-white shadow-lg shadow-accent/20 transition-all hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
                           >

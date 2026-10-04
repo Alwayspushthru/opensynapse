@@ -1,10 +1,11 @@
+import { generateContentWithApiKeyProvider } from '../src/lib/providerGateway.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import dotenv from 'dotenv';
 import { GoogleGenAI, Type } from '@google/genai';
 import { handleAuthCommand } from './cli-auth.js';
 import { generateContentWithCodeAssist } from '../src/lib/codeAssist.js';
-import { DEFAULT_TEXT_MODEL } from '../src/lib/aiModels.js';
+import { DEFAULT_TEXT_MODEL, getApiModelId, parseModelSelection } from '../src/lib/aiModels.js';
 import { autoDetectAndParse, toSessions } from '../src/services/importParsers.js';
 import {
   loadCredentials,
@@ -32,7 +33,7 @@ function wrapGoogleGenAI(client: GoogleGenAI): AIClient {
   return {
     models: {
       generateContent: async (params: any) => {
-        const response = await client.models.generateContent(params);
+        const response = await client.models.generateContent({ ...params, model: getApiModelId(params.model) });
         return { text: response.text };
       },
     },
@@ -40,6 +41,10 @@ function wrapGoogleGenAI(client: GoogleGenAI): AIClient {
 }
 
 async function initAI() {
+  if (parseModelSelection(CLI_MODEL).provider !== 'gemini') {
+    ai = { models: { generateContent: generateContentWithApiKeyProvider } };
+    return;
+  }
   const savedCredentials = await loadCredentials();
 
   if (savedCredentials) {
@@ -50,7 +55,7 @@ async function initAI() {
         ai = {
           models: {
             generateContent: async (params: any) => {
-              const response = await generateContentWithCodeAssist(params, clientConfig);
+              const response = await generateContentWithCodeAssist({ ...params, model: getApiModelId(params.model) }, clientConfig);
               return { text: response.text };
             },
           },

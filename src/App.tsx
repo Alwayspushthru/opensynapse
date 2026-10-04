@@ -452,6 +452,10 @@ export default function App() {
   if (!user && !isUsingDevAuthBypass) {
     return (
       <LoginSelection
+        onLoginSuccess={(authenticatedUser) => {
+          setIsLoadingData(true);
+          setUser(authenticatedUser);
+        }}
         onSocialLogin={handleLogin}
         onAuthError={(error) => console.error('Login error:', error)}
       />

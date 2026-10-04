@@ -5,6 +5,7 @@ import { cn } from '../../lib/utils';
 import { authClient } from '../../auth/client';
 
 interface LoginSelectionProps {
+  onLoginSuccess: (user: typeof authClient.$Infer.Session.user) => void;
   onSocialLogin?: (provider: LoginProvider) => Promise<void>;
   onAuthError?: (error: string) => void;
 }
@@ -23,7 +24,7 @@ interface ProviderConfig {
   description: string;
 }
 
-export default function LoginSelection({ onSocialLogin, onAuthError }: LoginSelectionProps) {
+export default function LoginSelection({ onSocialLogin, onAuthError, onLoginSuccess }: LoginSelectionProps) {
   const [loadingProvider, setLoadingProvider] = useState<LoginProvider | null>(null);
 
   const [isRegistering, setIsRegistering] = useState(false);
@@ -181,10 +182,17 @@ export default function LoginSelection({ onSocialLogin, onAuthError }: LoginSele
 
     setIsSubmitting(true);
     try {
-      await authClient.signIn.email({
+      const result = await authClient.signIn.email({
         email: loginEmail,
         password: loginPassword,
       });
+      if (result.error) {
+        throw result.error;
+      }
+      if (!result.data?.user) {
+        throw new Error('登录未返回用户信息，请重试');
+      }
+      onLoginSuccess(result.data.user);
     } catch (error) {
       const err = error as { message?: string };
       setLoginError(err.message || '登录失败，请检查邮箱和密码');

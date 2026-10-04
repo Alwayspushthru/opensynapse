@@ -4,18 +4,14 @@ This document describes all environment variables required for OpenSynapse.
 
 ## Required Variables
 
-### Firebase Configuration
+### Database and Authentication
 
 ```bash
-# Firebase Admin SDK (for server-side operations)
-# Option 1: Service account JSON (recommended for local development)
-FIREBASE_SERVICE_ACCOUNT_KEY={"type":"service_account","project_id":"...",...}
-
-# Option 2: Application Default Credentials (recommended for GCP deployment)
-# No env var needed - uses GCP metadata service
+DATABASE_URL=postgresql://opensynapse:password@localhost:5432/opensynapse
+BETTER_AUTH_SECRET=replace-with-at-least-32-random-characters
 ```
 
-Get service account key from Firebase Console → Project Settings → Service Accounts → Generate new private key.
+The current application uses PostgreSQL and better-auth. Firebase credentials are only relevant to the historical migration script.
 
 ### WeChat OAuth (微信登录)
 
@@ -49,17 +45,23 @@ GEMINI_API_KEY=AIza...
 OPENAI_API_KEY=sk-...
 OPENAI_BASE_URL=https://api.openai.com/v1  # optional
 
-# MiniMax
-MINIMAX_API_KEY=your_minimax_key
-MINIMAX_BASE_URL=https://api.minimax.chat/v1  # optional
+# DeepSeek (default chat and extraction provider)
+DEEPSEEK_API_KEY=
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+DEEPSEEK_MODEL=deepseek-flash
 
-# Zhipu GLM (智谱)
-ZHIPU_API_KEY=your_zhipu_key
-ZHIPU_BASE_URL=https://open.bigmodel.cn/api/paas/v4  # optional
+# Qwen / Alibaba Cloud Model Studio (Beijing; use the endpoint for your workspace/region)
+QWEN_API_KEY=
+QWEN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+QWEN_MODEL=qwen3.7-plus
 
-# Moonshot Kimi
-MOONSHOT_API_KEY=sk-...
-MOONSHOT_BASE_URL=https://api.moonshot.cn/v1  # optional
+# GLM / Zhipu: OpenAI Chat Completions, not the Anthropic endpoint
+ZHIPU_API_KEY=
+ZHIPU_BASE_URL=https://open.bigmodel.cn/api/paas/v4
+ZHIPU_MODEL=glm-5.3
+
+GEMINI_MODEL=gemini-3.8-flash
+OPENAI_MODEL=gpt-6.1-sol
 ```
 
 **Note:** For commercial deployments, users should configure their own API keys in Settings. Global keys are only used as fallback.
@@ -81,7 +83,7 @@ VITE_DISABLE_AUTH=0  # Set to 1 to disable auth in development (NOT for producti
 
 When making AI requests, the system resolves API keys in this order:
 
-1. **User's personal API key** (from Firestore `account_secrets/{uid}`)
+1. **User's personal API key** (from PostgreSQL `api_keys`)
 2. **Global environment variable** (from this file)
 3. **OAuth token** (for Gemini, if using Code Assist OAuth)
 
@@ -98,7 +100,7 @@ For third-party OAuth (WeChat/QQ):
 2. Server generates state + redirects to provider OAuth page
 3. User authorizes → Provider redirects to `/auth/{provider}/callback`
 4. Server exchanges code for access_token + openid
-5. Server finds/creates user in Firestore
+5. Server finds/creates user in PostgreSQL via better-auth
 6. Server generates Firebase Custom Token
 7. Server redirects to `/auth/complete?token=...`
 8. Frontend calls `signInWithCustomToken(auth, token)`
@@ -109,7 +111,7 @@ For third-party OAuth (WeChat/QQ):
 1. **Never commit `.env.local`** - It's in `.gitignore` for a reason
 2. **Service account keys** - Treat these like passwords. Rotate regularly.
 3. **WeChat/QQ secrets** - Keep these secure. Regenerate if leaked.
-4. **API keys** - Users' personal keys are encrypted at rest in Firestore
+4. **API keys** - Users' personal keys are stored in PostgreSQL with user-level access isolation
 
 ## Development vs Production
 

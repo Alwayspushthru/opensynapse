@@ -1,3 +1,4 @@
+import { AI_PROVIDER_IDS, isAIProviderId } from '../lib/aiModels.js';
 import { Router } from "express";
 import { eq, and } from "drizzle-orm";
 import { noteRepo } from "../repositories/note.repo";
@@ -564,7 +565,7 @@ router.get("/api-keys", requireAuth(async (req, res, userId) => {
     const keys = await apiKeyRepo.findByUser(userId);
     const result: Record<string, string> = {};
     for (const key of keys) {
-      result[`${key.provider}ApiKey`] = key.key;
+      if (isAIProviderId(key.provider)) result[`${key.provider}ApiKey`] = key.key;
     }
     res.json(result);
   } catch (error) {
@@ -575,7 +576,7 @@ router.get("/api-keys", requireAuth(async (req, res, userId) => {
 
 router.put("/api-keys", requireAuth(async (req, res, userId) => {
   try {
-    const providers = ['gemini', 'openai', 'openrouter', 'nvidia', 'minimax', 'zhipu', 'moonshot'];
+    const providers = AI_PROVIDER_IDS;
     for (const provider of providers) {
       const key = req.body[`${provider}ApiKey`];
       if (key !== undefined) {

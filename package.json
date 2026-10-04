@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx server.ts",
+    "dev": "tsx watch server.ts",
     "start": "tsx server.ts",
     "build": "vite build",
     "preview": "vite preview",
@@ -12,7 +12,8 @@
     "lint": "tsc --noEmit",
     "cli": "tsx scripts/cli.ts",
     "cli:auth": "tsx scripts/cli-auth.ts",
-    "oc:status": "tsx scripts/cli-opencode.ts status"
+    "oc:status": "tsx scripts/cli-opencode.ts status",
+    "test:providers": "node --import tsx --test tests/providerGateway.test.ts"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",

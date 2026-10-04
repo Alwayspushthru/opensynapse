@@ -1,6 +1,6 @@
 # OpenSynapse (突触) - AGENTS.md
 
-**Updated:** 2026-03-30 (Default model MiniMax M2.7, general-chat persona, UI compact)
+**Updated:** 2026-10-04 (Five official providers, default DeepSeek)
 **Branch:** main
 
 ## Overview
@@ -12,7 +12,7 @@ OpenSynapse 是一个 AI 驱动的知识复利系统，核心能力包括：
 - **AI 学习会话** - 流式对话、思考过程展示、停止/重新生成功能
 - **知识提炼** - 从对话或文档自动提取结构化笔记和闪卡
 - **对话导入** - 支持 JSON、Markdown、纯文本格式导入历史对话，新增Gemini网页导出格式支持
-- **多 AI 提供商** - 支持 Gemini、OpenAI、MiniMax、智谱 GLM、Moonshot Kimi
+- **多 AI 提供商** - 支持 Gemini、OpenAI、Qwen、DeepSeek、智谱 GLM
 - **FSRS 复习** - 基于间隔重复算法的科学复习系统
 - **知识图谱** - D3.js 可视化展示概念关联
 - **明暗主题** - 支持亮色/暗色模式切换
@@ -71,7 +71,7 @@ OpenSynapse 是一个 AI 驱动的知识复利系统，核心能力包括：
   - 聊天、RAG、文档解构、语义链接、embedding
 - `src/api/ai.ts`
   - 服务端 AI 路由
-  - 多提供商请求分发（Gemini / OpenAI / MiniMax / 智谱 / Moonshot）
+  - 多提供商请求分发（Gemini / OpenAI / Qwen / DeepSeek / 智谱）
   - 优先 API Key，否则复用 Gemini CLI / Code Assist OAuth
 - `src/lib/codeAssist.ts`
   - Code Assist `generateContent` 请求封装
@@ -80,7 +80,7 @@ OpenSynapse 是一个 AI 驱动的知识复利系统，核心能力包括：
 - `src/lib/providerGateway.ts`
   - 非 Gemini 提供商的统一网关
   - OpenAI 兼容协议适配
-  - Anthropic 兼容协议适配（MiniMax / 智谱）
+  - OpenAI Responses 协议适配（GPT）
 - `src/lib/oauth.ts`
   - Gemini CLI / Code Assist 风格 OAuth
   - 解析本机 `gemini` CLI 内置 client
@@ -90,9 +90,9 @@ OpenSynapse 是一个 AI 驱动的知识复利系统，核心能力包括：
   - 支持 OpenAI 官方 OAuth 登录
 - `src/lib/aiModels.ts`
   - 多提供商模型配置
-  - 模型列表与协议定义（gemini_native / openai_compat / anthropic_compat）
+  - 模型列表与协议定义（gemini_native / openai_compat / openai_responses）
   - fallback 策略
-  - 默认文本模型：MiniMax M2.7，默认 Embedding：智谱 embedding-3
+  - 默认文本模型：DeepSeek Flash，默认 Embedding：智谱 embedding-3
 - `src/services/importParsers.ts`
   - 对话导入解析器
   - 支持 JSON / Markdown / 纯文本自动检测
@@ -141,12 +141,12 @@ OpenSynapse 是一个 AI 驱动的知识复利系统，核心能力包括：
 |------|------|-------|
 | 聊天 UI | `src/components/ChatView.tsx` | 模型切换、人格切换、流式对话、停止/重新生成 |
 | 聊天业务逻辑 | `src/services/gemini.ts` | 流式 SSE 解析、思考过程展示、RAG |
-| 服务端 AI 请求 | `src/api/ai.ts` | 多提供商路由（Gemini/OpenAI/MiniMax/智谱/Moonshot） |
-| Provider 网关 | `src/lib/providerGateway.ts` | OpenAI/Anthropic 兼容协议适配 |
+| 服务端 AI 请求 | `src/api/ai.ts` | 多提供商路由（Gemini/OpenAI/Qwen/DeepSeek/智谱） |
+| Provider 网关 | `src/lib/providerGateway.ts` | Chat Completions / Responses 协议适配 |
 | OAuth 登录 | `src/lib/oauth.ts` | Gemini CLI / Code Assist OAuth |
 | OpenAI OAuth | `src/lib/openaiCodexOAuth.ts` | Codex 风格 OAuth 实现 |
 | Code Assist 请求 | `src/lib/codeAssist.ts` | `cloudcode-pa.googleapis.com` |
-| 模型配置 | `src/lib/aiModels.ts` | 多提供商模型列表与 fallback 策略，默认 MiniMax M2.7 |
+| 模型配置 | `src/lib/aiModels.ts` | 多提供商模型列表与 fallback 策略，默认 DeepSeek Flash |
 | 人格系统 | `src/lib/personas.ts` | 多导师人格定义、通用助手（默认）、安全边界防护 |
 | 对话导入 | `src/services/importParsers.ts` | JSON/Markdown/TXT 解析与去重，支持Gemini网页导出格式 |
 | 导入弹窗 | `src/components/ImportDialog.tsx` | 文件拖拽、粘贴、预览、导入 |
@@ -314,40 +314,17 @@ For commercial multi-tenant use, API keys are stored per-user in PostgreSQL.
 
 - `src/lib/aiModels.ts`
 
-当前 UI 支持模型切换，包含：
+当前只预置五家官方通用模型：
 
-**Google Gemini:**
-- `gemini-3-flash-preview`
-- `gemini-3.1-pro-preview`
-- `gemini-2.5-pro`
-- `gemini-2.5-flash`
-- `gemini-2.5-flash-lite`
+- DeepSeek：`deepseek/deepseek-flash`（聊天和知识提炼默认）
+- Gemini：`gemini/gemini-3.8-flash`
+- GPT：`openai/gpt-6.1-sol`（官方 API Key + Responses）
+- Qwen：`qwen/qwen3.7-plus`（百炼 OpenAI 兼容接口）
+- GLM：`zhipu/glm-5.3`（Chat Completions，必须开启思考）
 
-**OpenAI:**
-- `gpt-5.4` (最新通用模型)
-- `gpt-5.3` / `gpt-5.3-codex`
-- `gpt-5.2` / `gpt-5.2-codex` / `gpt-5.2-pro`
-- `gpt-5.1` / `gpt-5.1-codex` / `gpt-5.1-codex-max` / `gpt-5.1-codex-mini`
-- `gpt-5-mini`
+厂商清单、环境变量名和协议由 `src/lib/aiModels.ts` 集中维护。模型环境变量如 `DEEPSEEK_MODEL` 覆盖预置项，聊天自定义模型可显式选择其他 ID。不自动回退到旧型号或其他厂商。只配置 DeepSeek Key 可使用聊天和文本提炼；Embedding 独立配置，缺少 Key 时降级。Gemini CLI OAuth 仅为兼容入口，其模型范围与官方 API 不同。
 
-**MiniMax:**
-- `MiniMax-M2.7` (默认文本模型)
-
-**智谱 GLM:**
-- `glm-5`
-- `glm-4.7`
-
-**Moonshot Kimi:**
-- `kimi-k2-thinking`
-- `kimi-k2-thinking-turbo`
-- `kimi-k2-0905-preview`
-- `kimi-k2-turbo-preview`
-
-注意：
-
-- Preview 模型在 Code Assist 路径上可能出现容量波动
-- 某些官方模型名不代表在当前 Code Assist 后端一定可用
-- 当前 fallback 已内置，但仍会遇到 `429` / `404`
+配置与验证方法见 `docs/AI_PROVIDERS.md`。
 
 ---
 
@@ -386,11 +363,11 @@ CLI 能正常，不代表 Web 聊天一定稳。
 
 ### Multi-Provider Limitations
 
-非 Gemini provider（OpenAI/MiniMax/智谱/Moonshot）：
+非 Gemini provider（OpenAI/Qwen/DeepSeek/智谱）：
 
 - **Embedding**：默认使用智谱 Embedding-3，支持所有提供商的 embedding 模型
 - **结构化 JSON 输出**：格式可能有差异，系统已添加 `safeJsonParse` 自动提取 JSON
-- **流式响应**：chunk 格式需适配，已完成 Gemini/OpenAI/MiniMax/智谱/Moonshot 的适配
+- **流式响应**：chunk 格式需适配，已完成 Gemini/OpenAI/Qwen/DeepSeek/智谱 的适配
 
 ### Knowledge Extraction
 
@@ -504,7 +481,7 @@ npx tsx cli.ts ./path/to/file.txt
 - CLI 仍保留 `/api/sync` 兼容导入链路（仅开发模式）
 - 用户级 API Key 在 `src/repositories/apiKey.repo.ts` 和 `src/services/userApiKeyService.ts`
 - 知识提炼模型配置在 `SettingsView`，用户可独立选择结构化输出模型（对话模型 vs 知识提炼模型）
-- GPT-5.4 / GPT-5.3 系列模型已添加，支持通用版和 Codex 代码版
+- GPT 通用模型使用官方 Responses 接口，旧 Codex OAuth 不参与当前模型路由
 - 流式聊天体验已完成，支持 SSE 实时显示和停止/重新生成
 - **认证系统已迁移到 better-auth** (已替换 Firebase Auth)
 - **向量数据库使用 Chroma** (本地，替代 Firebase Vector Search)

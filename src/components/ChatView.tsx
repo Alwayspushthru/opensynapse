@@ -233,7 +233,8 @@ export default function ChatView({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const docInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const isCustomModel = !isKnownTextModel(selectedModel);
+  const [showCustomModel, setShowCustomModel] = useState(false);
+  const isCustomModel = showCustomModel || !isKnownTextModel(selectedModel);
   const currentModelOption = getModelOption(selectedModel);
 
   // 搜索 + 来源筛选的对话列表
@@ -386,11 +387,11 @@ export default function ChatView({
       const currentModelOption = AI_MODEL_OPTIONS.find(m => m.id === selectedModel);
       const parsed = parseModelSelection(selectedModel);
       const hasVisionSupport = currentModelOption?.supportsVision;
-      // 支持智谱 OCR 和 MiniMax 图片理解(Token Plan)
-      const canProcessImage = parsed.provider === 'zhipu' || parsed.provider === 'minimax';
+      // 文本 GLM 模型可通过 OCR 读取图片文字。
+      const canProcessImage = parsed.provider === 'zhipu';
       
       if (!hasVisionSupport && !canProcessImage) {
-        alert(`当前模型 (${currentModelOption?.label || selectedModel}) 不支持图片。请切换到 Gemini、GPT、智谱或 MiniMax 系列模型。`);
+        alert(`当前模型 (${currentModelOption?.label || selectedModel}) 不支持图片。请切换到支持图片的 DeepSeek、Gemini、GPT、Qwen 模型，或使用智谱 OCR。`);
         return;
       }
       
@@ -765,17 +766,19 @@ await new Promise(resolve => setTimeout(resolve, 400));
   const handleModelSelect = (event: React.ChangeEvent<HTMLSelectElement>) => {
     const nextValue = event.target.value;
     if (nextValue === '__custom__') {
-      const fallback = customModelInput.trim() || selectedModel;
-      applyModel(fallback);
+      setShowCustomModel(true);
       return;
     }
+    setShowCustomModel(false);
     applyModel(nextValue);
   };
 
   const handleCustomModelSubmit = () => {
     const nextModel = customModelInput.trim();
     if (!nextModel) return;
-    applyModel(nextModel);
+    try { applyModel(nextModel); } catch (error) {
+      alert(error instanceof Error ? error.message : '模型格式错误');
+    }
   };
 
   return (
@@ -1024,7 +1027,7 @@ await new Promise(resolve => setTimeout(resolve, 400));
                         handleCustomModelSubmit();
                       }
                     }}
-                    placeholder="例如 openai/gpt-5.2 或 gemini/gemini-3.1-pro-preview"
+                    placeholder="例如 deepseek/deepseek-flash 或 qwen/qwen3.8-max"
                     className="w-full md:w-64 rounded-full border border-border-main bg-tertiary px-4 py-2 text-sm text-text-main placeholder:text-text-muted/40 outline-none focus:border-accent/40"
                   />
                   <button

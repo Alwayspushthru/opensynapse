@@ -1,16 +1,18 @@
-export type AIProviderId = 'gemini' | 'openai' | 'openrouter' | 'nvidia' | 'minimax' | 'zhipu' | 'moonshot';
-export type AIProviderAuthMode = 'gemini_cli_oauth_or_api_key' | 'openai_codex_oauth_or_api_key' | 'api_key';
+export type AIProviderId = 'gemini' | 'openai' | 'qwen' | 'deepseek' | 'zhipu';
+export type AIProviderAuthMode = 'gemini_cli_oauth_or_api_key' | 'api_key';
 export type AIModelLifecycle = 'stable' | 'preview';
-export type AIProviderProtocol = 'gemini_native' | 'openai_compat' | 'anthropic_compat';
+export type AIProviderProtocol = 'gemini_native' | 'openai_compat' | 'openai_responses';
 
 export interface AIProviderDefinition {
   id: AIProviderId;
   label: string;
   authMode: AIProviderAuthMode;
   protocol: AIProviderProtocol;
-  apiKeyEnvVar?: string;
+  apiKeyEnvVar: string;
   baseUrl?: string;
   baseUrlEnvVar?: string;
+  modelEnvVar: string;
+  defaultModel: string;
   docsUrl: string;
 }
 
@@ -25,443 +27,108 @@ export interface AIModelOption {
   supportsVision?: boolean;
 }
 
+// Official API presets verified 2026-10-04. Model overrides contain no credentials.
 export const AI_PROVIDERS: Record<AIProviderId, AIProviderDefinition> = {
+  deepseek: {
+    id: 'deepseek', label: 'DeepSeek', authMode: 'api_key', protocol: 'openai_compat',
+    apiKeyEnvVar: 'DEEPSEEK_API_KEY', baseUrl: 'https://api.deepseek.com',
+    baseUrlEnvVar: 'DEEPSEEK_BASE_URL', modelEnvVar: 'DEEPSEEK_MODEL', defaultModel: 'deepseek-flash',
+    docsUrl: 'https://api-docs.deepseek.com/zh-cn/',
+  },
   gemini: {
-    id: 'gemini',
-    label: 'Google Gemini',
-    authMode: 'gemini_cli_oauth_or_api_key',
-    protocol: 'gemini_native',
-    apiKeyEnvVar: 'GEMINI_API_KEY',
-    docsUrl: 'https://ai.google.dev/gemini-api/docs/models/gemini',
+    id: 'gemini', label: 'Google Gemini', authMode: 'gemini_cli_oauth_or_api_key', protocol: 'gemini_native',
+    apiKeyEnvVar: 'GEMINI_API_KEY', modelEnvVar: 'GEMINI_MODEL', defaultModel: 'gemini-3.8-flash',
+    docsUrl: 'https://ai.google.dev/gemini-api/docs/models',
   },
   openai: {
-    id: 'openai',
-    label: 'OpenAI',
-    authMode: 'openai_codex_oauth_or_api_key',
-    protocol: 'openai_compat',
-    apiKeyEnvVar: 'OPENAI_API_KEY',
-    baseUrl: 'https://api.openai.com/v1',
-    baseUrlEnvVar: 'OPENAI_BASE_URL',
-    docsUrl: 'https://platform.openai.com/docs/models',
+    id: 'openai', label: 'GPT / OpenAI', authMode: 'api_key', protocol: 'openai_responses',
+    apiKeyEnvVar: 'OPENAI_API_KEY', baseUrl: 'https://api.openai.com/v1',
+    baseUrlEnvVar: 'OPENAI_BASE_URL', modelEnvVar: 'OPENAI_MODEL', defaultModel: 'gpt-6.1-sol',
+    docsUrl: 'https://developers.openai.com/api/docs/models',
   },
-  openrouter: {
-    id: 'openrouter',
-    label: 'OpenRouter',
-    authMode: 'api_key',
-    protocol: 'openai_compat',
-    apiKeyEnvVar: 'OPENROUTER_API_KEY',
-    baseUrl: 'https://openrouter.ai/api/v1',
-    baseUrlEnvVar: 'OPENROUTER_BASE_URL',
-    docsUrl: 'https://openrouter.ai/models',
-  },
-  nvidia: {
-    id: 'nvidia',
-    label: 'NVIDIA NIM',
-    authMode: 'api_key',
-    protocol: 'openai_compat',
-    apiKeyEnvVar: 'NVIDIA_API_KEY',
-    baseUrl: 'https://integrate.api.nvidia.com/v1',
-    baseUrlEnvVar: 'NVIDIA_BASE_URL',
-    docsUrl: 'https://build.nvidia.com/models',
-  },
-  minimax: {
-    id: 'minimax',
-    label: 'MiniMax',
-    authMode: 'api_key',
-    protocol: 'anthropic_compat',
-    apiKeyEnvVar: 'MINIMAX_API_KEY',
-    baseUrl: 'https://api.minimaxi.com/anthropic',
-    baseUrlEnvVar: 'MINIMAX_BASE_URL',
-    docsUrl: 'https://platform.minimax.io/docs/guide/Models/Text%20Models',
+  qwen: {
+    id: 'qwen', label: 'Qwen / 通义千问', authMode: 'api_key', protocol: 'openai_compat',
+    apiKeyEnvVar: 'QWEN_API_KEY', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    baseUrlEnvVar: 'QWEN_BASE_URL', modelEnvVar: 'QWEN_MODEL', defaultModel: 'qwen3.7-plus',
+    docsUrl: 'https://help.aliyun.com/zh/model-studio/models',
   },
   zhipu: {
-    id: 'zhipu',
-    label: 'Zhipu GLM',
-    authMode: 'api_key',
-    protocol: 'openai_compat',
-    apiKeyEnvVar: 'ZHIPU_API_KEY',
-    baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
-    baseUrlEnvVar: 'ZHIPU_BASE_URL',
-    docsUrl: 'https://open.bigmodel.cn/dev/api',
-  },
-  moonshot: {
-    id: 'moonshot',
-    label: 'Kimi Code',
-    authMode: 'api_key',
-    protocol: 'openai_compat',
-    apiKeyEnvVar: 'MOONSHOT_API_KEY',
-    baseUrl: 'https://api.kimi.com/coding/v1',
-    baseUrlEnvVar: 'MOONSHOT_BASE_URL',
-    docsUrl: 'https://www.kimi.com/code/docs/',
+    id: 'zhipu', label: 'GLM / 智谱', authMode: 'api_key', protocol: 'openai_compat',
+    apiKeyEnvVar: 'ZHIPU_API_KEY', baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+    baseUrlEnvVar: 'ZHIPU_BASE_URL', modelEnvVar: 'ZHIPU_MODEL', defaultModel: 'glm-5.3',
+    docsUrl: 'https://docs.bigmodel.cn/cn/guide/models/text/glm-5.3',
   },
 };
+export const AI_PROVIDER_IDS = Object.keys(AI_PROVIDERS) as AIProviderId[];
+export function isAIProviderId(value: string): value is AIProviderId {
+  return Object.prototype.hasOwnProperty.call(AI_PROVIDERS, value);
+}
+export const PROVIDER_ENV_KEY = Object.fromEntries(AI_PROVIDER_IDS.map(id => [id, AI_PROVIDERS[id].apiKeyEnvVar])) as Record<AIProviderId, string>;
+export const PROVIDER_BASE_URL_ENV_KEY = Object.fromEntries(AI_PROVIDER_IDS.map(id => [id, AI_PROVIDERS[id].baseUrlEnvVar])) as Partial<Record<AIProviderId, string>>;
+export const PROVIDER_CONFIG_ENV_VARS = AI_PROVIDER_IDS.flatMap(id => {
+  const p = AI_PROVIDERS[id];
+  return [p.apiKeyEnvVar, ...(p.baseUrlEnvVar ? [p.baseUrlEnvVar] : []), p.modelEnvVar];
+});
 
-export const DEFAULT_TEXT_MODEL = 'moonshot/kimi-for-coding';
-export const DEFAULT_STRUCTURED_MODEL = 'moonshot/kimi-for-coding';
+export const DEFAULT_TEXT_MODEL = 'deepseek/deepseek-flash';
+export const DEFAULT_STRUCTURED_MODEL = DEFAULT_TEXT_MODEL;
 export const DEFAULT_EMBEDDING_MODEL = 'zhipu/embedding-3';
 export const TEXT_MODEL_STORAGE_KEY = 'opensynapse.preferred-text-model';
 export const STRUCTURED_MODEL_STORAGE_KEY = 'opensynapse.preferred-structured-model';
 export const EMBEDDING_MODEL_STORAGE_KEY = 'opensynapse.preferred-embedding-model';
 
-export const AI_MODEL_OPTIONS: AIModelOption[] = [
-  {
-    id: 'gemini/gemini-3-flash-preview',
-    provider: 'gemini',
-    model: 'gemini-3-flash-preview',
-    label: 'Gemini 3 Flash',
-    description: 'Google Preview 模型，适合多模态与 agentic 场景。',
-    lifecycle: 'preview',
-    docsUrl: 'https://ai.google.dev/gemini-api/docs/models/gemini-3-flash-preview',
-    supportsVision: true,
-  },
-  {
-    id: 'gemini/gemini-3.1-pro-preview',
-    provider: 'gemini',
-    model: 'gemini-3.1-pro-preview',
-    label: 'Gemini 3.1 Pro',
-    description: 'Google Preview 推理模型，适合复杂代码与长上下文任务。',
-    lifecycle: 'preview',
-    docsUrl: 'https://ai.google.dev/gemini-api/docs/models/gemini-3.1-pro-preview',
-    supportsVision: true,
-  },
-  {
-    id: 'gemini/gemini-2.5-pro',
-    provider: 'gemini',
-    model: 'gemini-2.5-pro',
-    label: 'Gemini 2.5 Pro',
-    description: 'Google 稳定版高阶推理模型。',
-    lifecycle: 'stable',
-    docsUrl: 'https://ai.google.dev/gemini-api/docs/models/gemini-2.5-pro',
-    supportsVision: true,
-  },
-  {
-    id: 'gemini/gemini-2.5-flash',
-    provider: 'gemini',
-    model: 'gemini-2.5-flash',
-    label: 'Gemini 2.5 Flash',
-    description: 'Google 稳定版高性价比模型，适合作为默认聊天模型。',
-    lifecycle: 'stable',
-    docsUrl: 'https://ai.google.dev/gemini-api/docs/models/gemini-2.5-flash',
-    supportsVision: true,
-  },
-  {
-    id: 'gemini/gemini-2.5-flash-lite',
-    provider: 'gemini',
-    model: 'gemini-2.5-flash-lite',
-    label: 'Gemini 2.5 Flash-Lite',
-    description: 'Google 稳定版低成本模型，适合轻量任务。',
-    lifecycle: 'stable',
-    docsUrl: 'https://ai.google.dev/gemini-api/docs/models/gemini-2.5-flash-lite',
-    supportsVision: true,
-  },
-  {
-    id: 'openai/gpt-5.2',
-    provider: 'openai',
-    model: 'gpt-5.2',
-    label: 'GPT-5.2',
-    description: 'OpenAI GPT-5 通用模型，支持 Codex OAuth 或 API key。',
-    lifecycle: 'stable',
-    docsUrl: 'https://platform.openai.com/docs/models',
-    supportsVision: true,
-  },
-  {
-    id: 'openai/gpt-5.2-codex',
-    provider: 'openai',
-    model: 'gpt-5.2-codex',
-    label: 'GPT-5.2 Codex',
-    description: 'Codex 优化模型，适合代码与 agent 场景，支持 OpenAI Codex OAuth。',
-    lifecycle: 'stable',
-    docsUrl: 'https://github.com/openai/codex',
-    supportsVision: true,
-  },
-  {
-    id: 'openai/gpt-5.1',
-    provider: 'openai',
-    model: 'gpt-5.1',
-    label: 'GPT-5.1',
-    description: 'OpenAI GPT-5.1 通用模型，支持 Codex OAuth 或 API key。',
-    lifecycle: 'stable',
-    docsUrl: 'https://github.com/openai/codex',
-    supportsVision: true,
-  },
-  {
-    id: 'openai/gpt-5.1-codex-max',
-    provider: 'openai',
-    model: 'gpt-5.1-codex-max',
-    label: 'GPT-5.1 Codex Max',
-    description: 'Codex Max 档位，适合复杂代码任务，支持 OpenAI Codex OAuth。',
-    lifecycle: 'stable',
-    docsUrl: 'https://github.com/openai/codex',
-    supportsVision: true,
-  },
-  {
-    id: 'openai/gpt-5.1-codex',
-    provider: 'openai',
-    model: 'gpt-5.1-codex',
-    label: 'GPT-5.1 Codex',
-    description: 'Codex 模型，适合代码审查与多步操作，支持 OpenAI Codex OAuth。',
-    lifecycle: 'stable',
-    docsUrl: 'https://github.com/openai/codex',
-    supportsVision: true,
-  },
-  {
-    id: 'openai/gpt-5.1-codex-mini',
-    provider: 'openai',
-    model: 'gpt-5.1-codex-mini',
-    label: 'GPT-5.1 Codex Mini',
-    description: 'Codex 轻量版本，支持 OpenAI Codex OAuth。',
-    lifecycle: 'stable',
-    docsUrl: 'https://github.com/openai/codex',
-    supportsVision: true,
-  },
-  {
-    id: 'openai/gpt-5.4',
-    provider: 'openai',
-    model: 'gpt-5.4',
-    label: 'GPT-5.4',
-    description: 'OpenAI 最新 GPT-5.4 通用模型，更强的推理与代码能力。',
-    lifecycle: 'stable',
-    docsUrl: 'https://platform.openai.com/docs/models',
-    supportsVision: true,
-  },
-  {
-    id: 'openai/gpt-5.3',
-    provider: 'openai',
-    model: 'gpt-5.3',
-    label: 'GPT-5.3',
-    description: 'OpenAI GPT-5.3 通用模型，平衡性能与成本。',
-    lifecycle: 'stable',
-    docsUrl: 'https://platform.openai.com/docs/models',
-    supportsVision: true,
-  },
-  {
-    id: 'openai/gpt-5.3-codex',
-    provider: 'openai',
-    model: 'gpt-5.3-codex',
-    label: 'GPT-5.3 Codex',
-    description: 'GPT-5.3 Codex 代码优化版，适合中等复杂度代码任务。',
-    lifecycle: 'stable',
-    docsUrl: 'https://github.com/openai/codex',
-    supportsVision: true,
-  },
-  {
-    id: 'openai/gpt-5.2-pro',
-    provider: 'openai',
-    model: 'gpt-5.2-pro',
-    label: 'GPT-5.2 Pro',
-    description: 'OpenAI 平台 API 档位，当前建议走 API key。',
-    lifecycle: 'stable',
-    docsUrl: 'https://platform.openai.com/docs/models',
-    supportsVision: true,
-  },
-  {
-    id: 'openai/gpt-5-mini',
-    provider: 'openai',
-    model: 'gpt-5-mini',
-    label: 'GPT-5 Mini',
-    description: 'OpenAI 轻量 GPT-5 模型，当前建议走 API key。',
-    lifecycle: 'stable',
-    docsUrl: 'https://platform.openai.com/docs/models',
-    supportsVision: true,
-  },
-  {
-    id: 'nvidia/qwen/qwen3-coder-480b-a35b-instruct',
-    provider: 'nvidia',
-    model: 'qwen/qwen3-coder-480b-a35b-instruct',
-    label: 'Qwen3 Coder 480B (Free)',
-    description: 'NVIDIA NIM 免费，480B 编程与中文能力优秀。',
-    lifecycle: 'stable',
-    docsUrl: 'https://build.nvidia.com/qwen/qwen3-coder-480b-a35b-instruct',
-  },
-  {
-    id: 'nvidia/meta/llama-3.3-70b-instruct',
-    provider: 'nvidia',
-    model: 'meta/llama-3.3-70b-instruct',
-    label: 'Llama 3.3 70B (Free)',
-    description: 'NVIDIA NIM 免费 Meta Llama 3.3 70B，中文回复优秀。',
-    lifecycle: 'stable',
-    docsUrl: 'https://build.nvidia.com/meta/llama-3.3-70b-instruct',
-  },
-  {
-    id: 'nvidia/deepseek-ai/deepseek-v4-flash',
-    provider: 'nvidia',
-    model: 'deepseek-ai/deepseek-v4-flash',
-    label: 'DeepSeek V4 Flash (Free)',
-    description: 'NVIDIA NIM 免费 DeepSeek V4 Flash，适合日常对话。',
-    lifecycle: 'stable',
-    docsUrl: 'https://build.nvidia.com/deepseek-ai/deepseek-v4-flash',
-  },
-  {
-    id: 'nvidia/nvidia/llama-3.1-nemotron-ultra-253b-v1',
-    provider: 'nvidia',
-    model: 'nvidia/llama-3.1-nemotron-ultra-253b-v1',
-    label: 'Nemotron Ultra 253B (Free)',
-    description: 'NVIDIA 自研大模型，推理能力强。',
-    lifecycle: 'stable',
-    docsUrl: 'https://build.nvidia.com/nvidia/llama-3.1-nemotron-ultra-253b-v1',
-  },
-  {
-    id: 'minimax/MiniMax-M2.7',
-    provider: 'minimax',
-    model: 'MiniMax-M2.7',
-    label: 'MiniMax M2.7',
-    description: 'MiniMax 最新主力文本模型，更强的推理与多语言能力。',
-    lifecycle: 'stable',
-    docsUrl: 'https://platform.minimax.io/docs/guide/Models/Text%20Models',
-  },
-  {
-    id: 'zhipu/glm-5',
-    provider: 'zhipu',
-    model: 'glm-5',
-    label: 'GLM-5',
-    description: '智谱当前官方主力通用模型。',
-    lifecycle: 'stable',
-    docsUrl: 'https://open.bigmodel.cn/dev/api',
-  },
-  {
-    id: 'zhipu/glm-4.7',
-    provider: 'zhipu',
-    model: 'glm-4.7',
-    label: 'GLM-4.7',
-    description: '智谱稳定可用的次级 fallback。',
-    lifecycle: 'stable',
-    docsUrl: 'https://open.bigmodel.cn/dev/api',
-  },
-  {
-    id: 'zhipu/glm-4.6v',
-    provider: 'zhipu',
-    model: 'glm-4.6v',
-    label: 'GLM-4.6V',
-    description: '智谱视觉推理模型，支持图片理解。',
-    lifecycle: 'stable',
-    docsUrl: 'https://open.bigmodel.cn/dev/api',
-    supportsVision: true,
-  },
-  {
-    id: 'moonshot/kimi-for-coding',
-    provider: 'moonshot',
-    model: 'kimi-for-coding',
-    label: 'Kimi for Coding',
-    description: 'Kimi Code 编程专用模型，最高 100 Tokens/s，支持推理。',
-    lifecycle: 'stable',
-    docsUrl: 'https://www.kimi.com/code/docs/',
-  },
-];
+export const AI_MODEL_OPTIONS: AIModelOption[] = AI_PROVIDER_IDS.map(id => {
+  const provider = AI_PROVIDERS[id];
+  return {
+    id: `${id}/${provider.defaultModel}`, provider: id, model: provider.defaultModel,
+    label: `${provider.label} · ${provider.defaultModel}`,
+    description: id === 'deepseek' ? '默认聊天与知识提炼模型，官方 API 直连。' : '官方 API 直连，可在环境变量中更新模型。',
+    lifecycle: 'stable', docsUrl: provider.docsUrl,
+    supportsVision: ['gemini', 'openai', 'qwen', 'deepseek'].includes(id),
+  };
+});
 
 export const EMBEDDING_MODEL_OPTIONS: AIModelOption[] = [
-  {
-    id: 'gemini/gemini-embedding-2-preview',
-    provider: 'gemini',
-    model: 'gemini-embedding-2-preview',
-    label: 'Gemini Embedding 2',
-    description: '用于语义搜索、知识链接与 RAG 的向量模型。',
-    lifecycle: 'preview',
-    docsUrl: 'https://ai.google.dev/gemini-api/docs/embeddings',
-  },
-  {
-    id: 'openai/text-embedding-3-small',
-    provider: 'openai',
-    model: 'text-embedding-3-small',
-    label: 'OpenAI Text Embedding 3 Small',
-    description: 'OpenAI 高性价比 embedding 模型，1536 维，适合大规模语义搜索。',
-    lifecycle: 'stable',
-    docsUrl: 'https://platform.openai.com/docs/guides/embeddings',
-  },
-  {
-    id: 'openai/text-embedding-3-large',
-    provider: 'openai',
-    model: 'text-embedding-3-large',
-    label: 'OpenAI Text Embedding 3 Large',
-    description: 'OpenAI 高精度 embedding 模型，3072 维，适合精度优先场景。',
-    lifecycle: 'stable',
-    docsUrl: 'https://platform.openai.com/docs/guides/embeddings',
-  },
-  {
-    id: 'zhipu/embedding-3',
-    provider: 'zhipu',
-    model: 'embedding-3',
-    label: '智谱 Embedding 3',
-    description: '智谱 GLM embedding 模型，2048 维，中文语义表现优秀。',
-    lifecycle: 'stable',
-    docsUrl: 'https://open.bigmodel.cn/dev/api/vector/embedding-3',
-  },
+  { id: 'zhipu/embedding-3', provider: 'zhipu', model: 'embedding-3', label: '智谱 Embedding-3', description: '独立配置向量服务。', lifecycle: 'stable', docsUrl: AI_PROVIDERS.zhipu.docsUrl },
+  { id: 'openai/text-embedding-3-small', provider: 'openai', model: 'text-embedding-3-small', label: 'OpenAI text-embedding-3-small', description: '独立配置向量服务。', lifecycle: 'stable', docsUrl: 'https://developers.openai.com/api/docs/guides/embeddings' },
 ];
-
-export const MODEL_FALLBACKS: Record<string, string[]> = {
-  'gemini/gemini-3-flash-preview': ['gemini/gemini-2.5-flash', 'gemini/gemini-2.5-flash-lite'],
-  'gemini/gemini-3.1-pro-preview': ['gemini/gemini-2.5-pro', 'gemini/gemini-2.5-flash-lite'],
-  'gemini/gemini-2.5-pro': ['gemini/gemini-2.5-flash-lite'],
-  'gemini/gemini-2.5-flash': ['gemini/gemini-2.5-flash-lite'],
-  'openai/gpt-5.2': ['openai/gpt-5.1', 'openai/gpt-5-mini'],
-  'openai/gpt-5.2-codex': ['openai/gpt-5.1-codex', 'openai/gpt-5-mini'],
-  'openai/gpt-5.1': ['openai/gpt-5-mini'],
-  'openai/gpt-5.1-codex-max': ['openai/gpt-5.1-codex', 'openai/gpt-5-mini'],
-  'openai/gpt-5.1-codex': ['openai/gpt-5.1-codex-mini', 'openai/gpt-5-mini'],
-  'openai/gpt-5.1-codex-mini': ['openai/gpt-5-mini'],
-  'openai/gpt-5.4': ['openai/gpt-5.3', 'openai/gpt-5.2', 'openai/gpt-5.1', 'openai/gpt-5-mini'],
-  'openai/gpt-5.3': ['openai/gpt-5.2', 'openai/gpt-5.1', 'openai/gpt-5-mini'],
-  'openai/gpt-5.3-codex': ['openai/gpt-5.2-codex', 'openai/gpt-5.1-codex', 'openai/gpt-5-mini'],
-  'openai/gpt-5.2-pro': ['openai/gpt-5.2', 'openai/gpt-5-mini'],
-  'minimax/MiniMax-M2.7': [],
-  'nvidia/qwen/qwen3-coder-480b-a35b-instruct': ['nvidia/meta/llama-3.3-70b-instruct'],
-  'nvidia/meta/llama-3.3-70b-instruct': ['nvidia/deepseek-ai/deepseek-v4-flash'],
-  'nvidia/deepseek-ai/deepseek-v4-flash': ['nvidia/nvidia/llama-3.1-nemotron-ultra-253b-v1'],
-  'nvidia/nvidia/llama-3.1-nemotron-ultra-253b-v1': [],
-  'zhipu/glm-5': ['zhipu/glm-4.7', 'zhipu/glm-4.6v'],
-};
-
-const LEGACY_MODEL_ALIASES: Record<string, string> = Object.fromEntries(
-  AI_MODEL_OPTIONS.map((option) => [option.model, option.id])
-);
+export const MODEL_FALLBACKS: Record<string, string[]> = {};
 
 function canUseLocalStorage(): boolean {
   return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
 }
 
 export function inferProviderFromModelName(modelName: string): AIProviderId {
-  if (modelName.startsWith('gpt-')) return 'openai';
-  if (modelName.startsWith('MiniMax-')) return 'minimax';
-  if (modelName.startsWith('glm-') || modelName.startsWith('GLM-')) return 'zhipu';
-  if (modelName.startsWith('kimi-')) return 'moonshot';
-  if (modelName.startsWith('deepseek/') || modelName.startsWith('qwen/') || modelName.startsWith('google/') || modelName.startsWith('meta-llama/')) return 'openrouter';
-  if (modelName.startsWith('deepseek-ai/') || modelName.startsWith('nvidia/')) return 'nvidia';
-  return 'gemini';
+  if (modelName.startsWith('gemini-')) return 'gemini';
+  if (modelName.startsWith('gpt-') || modelName.startsWith('text-embedding-')) return 'openai';
+  if (/^glm-|^embedding-/i.test(modelName)) return 'zhipu';
+  if (modelName.startsWith('qwen')) return 'qwen';
+  if (modelName.startsWith('deepseek-')) return 'deepseek';
+  throw new Error('无法识别模型厂商，请使用 厂商/模型 格式，例如 deepseek/deepseek-flash。');
 }
 
-export function parseModelSelection(value: string | null | undefined): {
-  canonicalId: string;
-  provider: AIProviderId;
-  model: string;
-} {
-  const normalized = value?.trim();
-  if (!normalized) {
-    return { canonicalId: DEFAULT_TEXT_MODEL, provider: 'moonshot', model: 'kimi-for-coding' };
-  }
+export function parseModelSelection(value: string | null | undefined): { canonicalId: string; provider: AIProviderId; model: string } {
+  const normalized = value?.trim() || DEFAULT_TEXT_MODEL;
+  const slash = normalized.indexOf('/');
+  const provider = slash >= 0 ? normalized.slice(0, slash) : inferProviderFromModelName(normalized);
+  const model = slash >= 0 ? normalized.slice(slash + 1).trim() : normalized;
+  if (!isAIProviderId(provider) || !model) throw new Error(`不支持的模型：${normalized}`);
+  return { canonicalId: `${provider}/${model}`, provider, model };
+}
 
-  if (normalized.includes('/')) {
-    const [providerPart, ...modelParts] = normalized.split('/');
-    const provider = providerPart as AIProviderId;
-    const model = modelParts.join('/').trim();
-    if (provider in AI_PROVIDERS && model) {
-      return {
-        canonicalId: `${provider}/${model}`,
-        provider,
-        model,
-      };
-    }
-  }
-
-  const aliased = LEGACY_MODEL_ALIASES[normalized];
-  if (aliased) {
-    return parseModelSelection(aliased);
-  }
-
-  const inferredProvider = inferProviderFromModelName(normalized);
-  return {
-    canonicalId: `${inferredProvider}/${normalized}`,
-    provider: inferredProvider,
-    model: normalized,
-  };
+// Only migrate stored preferences. Explicit invalid requests must fail instead of silently changing providers.
+function readTextPreference(key: string, fallback: string): string {
+  if (!canUseLocalStorage()) return fallback;
+  const saved = window.localStorage.getItem(key);
+  if (!saved) return fallback;
+  try {
+    const parsed = parseModelSelection(saved);
+    // Historical built-in generations are retired; custom future model IDs stay usable.
+    const retired = /^(gemini-2\.|gemini-3-flash-preview$|gemini-3\.1-pro-preview$|gpt-5|glm-(4|5$))/.test(parsed.model);
+    if (!retired) return parsed.canonicalId;
+  } catch { /* Removed provider. */ }
+  window.localStorage.setItem(key, fallback);
+  return fallback;
 }
 
 export function normalizeModelId(value: string | null | undefined): string {
@@ -469,7 +136,10 @@ export function normalizeModelId(value: string | null | undefined): string {
 }
 
 export function getApiModelId(value: string | null | undefined): string {
-  return parseModelSelection(value).model;
+  const parsed = parseModelSelection(value);
+  const provider = AI_PROVIDERS[parsed.provider];
+  const override = typeof process !== 'undefined' ? process.env[provider.modelEnvVar]?.trim() : '';
+  return parsed.model === provider.defaultModel && override ? override : parsed.model;
 }
 
 export function getProviderForModel(value: string | null | undefined): AIProviderDefinition {
@@ -479,7 +149,7 @@ export function getProviderForModel(value: string | null | undefined): AIProvide
 
 export function getResolvedProviderConfig(value: string | null | undefined): AIProviderDefinition {
   const provider = getProviderForModel(value);
-  const overrideBaseUrl = provider.baseUrlEnvVar ? process.env[provider.baseUrlEnvVar]?.trim() : '';
+  const overrideBaseUrl = provider.baseUrlEnvVar && typeof process !== 'undefined' ? process.env[provider.baseUrlEnvVar]?.trim() : '';
   return {
     ...provider,
     baseUrl: overrideBaseUrl || provider.baseUrl,
@@ -487,19 +157,11 @@ export function getResolvedProviderConfig(value: string | null | undefined): AIP
 }
 
 export function getPreferredTextModel(): string {
-  if (!canUseLocalStorage()) {
-    return DEFAULT_TEXT_MODEL;
-  }
-
-  return normalizeModelId(window.localStorage.getItem(TEXT_MODEL_STORAGE_KEY));
+  return readTextPreference(TEXT_MODEL_STORAGE_KEY, DEFAULT_TEXT_MODEL);
 }
 
 export function getPreferredStructuredModel(): string {
-  if (!canUseLocalStorage()) {
-    return DEFAULT_STRUCTURED_MODEL;
-  }
-
-  return normalizeModelId(window.localStorage.getItem(STRUCTURED_MODEL_STORAGE_KEY));
+  return readTextPreference(STRUCTURED_MODEL_STORAGE_KEY, DEFAULT_STRUCTURED_MODEL);
 }
 
 export function getPreferredEmbeddingModel(): string {
@@ -512,7 +174,8 @@ export function getPreferredEmbeddingModel(): string {
     return DEFAULT_EMBEDDING_MODEL;
   }
 
-  const normalized = normalizeModelId(saved);
+  let normalized: string;
+  try { normalized = normalizeModelId(saved); } catch { return DEFAULT_EMBEDDING_MODEL; }
   return EMBEDDING_MODEL_OPTIONS.some((option) => option.id === normalized)
     ? normalized
     : DEFAULT_EMBEDDING_MODEL;

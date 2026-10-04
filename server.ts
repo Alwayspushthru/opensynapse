@@ -1,3 +1,4 @@
+import { PROVIDER_CONFIG_ENV_VARS } from './src/lib/aiModels';
 import dotenv from "dotenv";
 dotenv.config({ path: ".env.local" });
 
@@ -85,19 +86,7 @@ async function startServer() {
   const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
   const DATA_FILE = path.join(process.cwd(), "data.json");
   const ENV_FILE = path.join(process.cwd(), ".env.local");
-  const LOCAL_PROVIDER_ENV_VARS = [
-    'GEMINI_API_KEY',
-    'OPENAI_API_KEY',
-    'OPENAI_BASE_URL',
-    'MINIMAX_API_KEY',
-    'MINIMAX_BASE_URL',
-    'ZHIPU_API_KEY',
-    'ZHIPU_BASE_URL',
-    'MOONSHOT_API_KEY',
-    'MOONSHOT_BASE_URL',
-    'GOOGLE_CLOUD_PROJECT',
-    'GOOGLE_CLOUD_PROJECT_ID',
-  ] as const;
+  const LOCAL_PROVIDER_ENV_VARS = [...PROVIDER_CONFIG_ENV_VARS, 'GOOGLE_CLOUD_PROJECT', 'GOOGLE_CLOUD_PROJECT_ID'];
   let openAIOAuthFlow: {
     status: 'idle' | 'pending' | 'success' | 'error';
     authUrl?: string;

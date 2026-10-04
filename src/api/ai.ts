@@ -1,3 +1,4 @@
+import { type AIProviderId, PROVIDER_ENV_KEY, PROVIDER_BASE_URL_ENV_KEY, isAIProviderId } from '../lib/aiModels.js';
 import express from 'express';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
@@ -26,26 +27,7 @@ dotenv.config({ path: '.env.local' });
 
 const router = express.Router();
 
-type SupportedProvider = 'gemini' | 'openai' | 'openrouter' | 'nvidia' | 'minimax' | 'zhipu' | 'moonshot';
-
-const PROVIDER_ENV_KEY: Record<SupportedProvider, string> = {
-  gemini: 'GEMINI_API_KEY',
-  openai: 'OPENAI_API_KEY',
-  openrouter: 'OPENROUTER_API_KEY',
-  nvidia: 'NVIDIA_API_KEY',
-  minimax: 'MINIMAX_API_KEY',
-  zhipu: 'ZHIPU_API_KEY',
-  moonshot: 'MOONSHOT_API_KEY',
-};
-
-const PROVIDER_BASE_URL_ENV_KEY: Partial<Record<SupportedProvider, string>> = {
-  openai: 'OPENAI_BASE_URL',
-  openrouter: 'OPENROUTER_BASE_URL',
-  nvidia: 'NVIDIA_BASE_URL',
-  minimax: 'MINIMAX_BASE_URL',
-  zhipu: 'ZHIPU_BASE_URL',
-  moonshot: 'MOONSHOT_BASE_URL',
-};
+type SupportedProvider = AIProviderId;
 
 const providerOperationLocks = new Map<SupportedProvider, Promise<void>>();
 const bootGeminiApiKey = normalizeApiKey(process.env.GEMINI_API_KEY);
@@ -55,7 +37,7 @@ if (bootGeminiApiKey) {
   console.log('[Server] Initializing Gemini AI with API Key.');
   apiKeyClient = new GoogleGenAI({ apiKey: bootGeminiApiKey });
 } else {
-  console.log('[Server] No valid GEMINI_API_KEY found. AI routes will prefer Code Assist OAuth.');
+  console.log('[Server] No valid GEMINI_API_KEY found. Gemini requires an API Key or Code Assist OAuth; other providers are configured independently.');
 }
 
 function normalizeApiKey(value?: string | null): string | null {
@@ -66,15 +48,7 @@ function normalizeApiKey(value?: string | null): string | null {
   return trimmed;
 }
 
-function isSupportedProvider(provider: string): provider is SupportedProvider {
-  return provider === 'gemini'
-    || provider === 'openai'
-    || provider === 'openrouter'
-    || provider === 'nvidia'
-    || provider === 'minimax'
-    || provider === 'zhipu'
-    || provider === 'moonshot';
-}
+const isSupportedProvider = isAIProviderId;
 
 function withApiModelId(params: any) {
   return {
@@ -319,6 +293,9 @@ router.post('/generateContentStream', requireAuth(async (req, res, userId) => {
   res.setHeader('Connection', 'keep-alive');
   res.setHeader('X-Accel-Buffering', 'no');
 
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  res.on('close', abort);
   try {
     const authHeader = getAuthorizationHeader(req);
     const parsed = parseModelSelection(req.body?.model);
@@ -333,6 +310,7 @@ router.post('/generateContentStream', requireAuth(async (req, res, userId) => {
         const stream = generateContentStreamWithApiKeyProvider({
           ...req.body,
           model: parsed.canonicalId,
+          signal: controller.signal,
         });
         for await (const chunk of stream) {
           res.write(`data: ${JSON.stringify(chunk)}\n\n`);
@@ -370,9 +348,12 @@ router.post('/generateContentStream', requireAuth(async (req, res, userId) => {
     res.write('data: [DONE]\n\n');
     res.end();
   } catch (error: any) {
+    if (controller.signal.aborted) return;
     console.error('[AI] Stream Error:', error);
     res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
     res.end();
+  } finally {
+    res.off('close', abort);
   }
 }));
 
@@ -492,63 +473,6 @@ router.post('/ocr/zhipu', requireAuth(async (req, res, userId) => {
   } catch (error: any) {
     console.error('[AI] Zhipu OCR Error:', error);
     res.status(500).json({ error: error.message || 'OCR processing failed' });
-  }
-}));
-
-// ─── MiniMax 图片理解服务代理 ───
-router.post('/vision/minimax', requireAuth(async (req, res, userId) => {
-  try {
-    const { imageBase64, prompt = '请详细描述这张图片的内容' } = req.body;
-    
-    if (!imageBase64) {
-      return res.status(400).json({ error: 'Missing imageBase64' });
-    }
-
-    const apiKey = await getApiKeyForServer(userId, 'minimax') || process.env.MINIMAX_API_KEY;
-    
-    if (!apiKey) {
-      return res.status(400).json({ error: 'MINIMAX_API_KEY not configured' });
-    }
-
-    // MiniMax Token Plan 的 understand_image 工具调用
-    // 参考 MCP 工具格式: https://platform.minimaxi.com/docs/guides/token-plan-mcp-guide
-    const response = await fetch('https://api.minimaxi.com/v1/vision/understand', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        prompt,
-        image_url: imageBase64, // 支持 base64 data URL
-        model: 'MiniMax-M2.7',
-      }),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      // 如果 API 不存在或返回错误，提供友好提示
-      if (response.status === 404) {
-        return res.status(400).json({ 
-          error: 'MiniMax Token Plan required',
-          message: '图片理解功能需要 MiniMax Token Plan 订阅。请访问 https://platform.minimaxi.com/subscribe/token-plan 订阅',
-          fallback: 'ocr' // 建议回退到 OCR
-        });
-      }
-      throw new Error(`Vision API error: ${response.status} ${JSON.stringify(errorData)}`);
-    }
-
-    const result = await response.json();
-    res.json({
-      description: result.text || result.description || result.content,
-      raw: result,
-    });
-  } catch (error: any) {
-    console.error('[AI] MiniMax Vision Error:', error);
-    res.status(500).json({ 
-      error: error.message || 'Vision processing failed',
-      fallback: 'ocr'
-    });
   }
 }));
 

@@ -177,12 +177,12 @@ APP_URL="http://${PUBLIC_IP}"
 GEMINI_API_KEY=""
 OPENAI_API_KEY=""
 OPENAI_BASE_URL="https://api.openai.com/v1"
-MINIMAX_API_KEY=""
-MINIMAX_BASE_URL="https://api.minimaxi.com/anthropic"
+QWEN_API_KEY=""
+QWEN_BASE_URL="https://dashscope.aliyuncs.com/compatible-mode/v1"
 ZHIPU_API_KEY=""
-ZHIPU_BASE_URL="https://open.bigmodel.cn/api/anthropic"
-MOONSHOT_API_KEY=""
-MOONSHOT_BASE_URL="https://api.kimi.com/coding/"
+ZHIPU_BASE_URL="https://open.bigmodel.cn/api/paas/v4"
+DEEPSEEK_API_KEY=""
+DEEPSEEK_BASE_URL="https://api.deepseek.com"
 
 # Firebase (可选)
 # FIREBASE_SERVICE_ACCOUNT_KEY='{"type":"service_account",...}'

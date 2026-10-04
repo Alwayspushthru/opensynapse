@@ -1,27 +1,9 @@
+import { type AIProviderId, PROVIDER_ENV_KEY, PROVIDER_BASE_URL_ENV_KEY, isAIProviderId } from '../lib/aiModels.js';
 import { GoogleGenAI } from '@google/genai';
 import { DEFAULT_EMBEDDING_MODEL, getPreferredEmbeddingModel, parseModelSelection } from '../lib/aiModels.js';
 import { embedContentWithApiKeyProvider } from '../lib/providerGateway.js';
 
-type SupportedProvider = 'gemini' | 'openai' | 'openrouter' | 'nvidia' | 'minimax' | 'zhipu' | 'moonshot';
-
-const PROVIDER_ENV_KEY: Record<SupportedProvider, string> = {
-  gemini: 'GEMINI_API_KEY',
-  openai: 'OPENAI_API_KEY',
-  openrouter: 'OPENROUTER_API_KEY',
-  nvidia: 'NVIDIA_API_KEY',
-  minimax: 'MINIMAX_API_KEY',
-  zhipu: 'ZHIPU_API_KEY',
-  moonshot: 'MOONSHOT_API_KEY',
-};
-
-const PROVIDER_BASE_URL_ENV_KEY: Partial<Record<SupportedProvider, string>> = {
-  openai: 'OPENAI_BASE_URL',
-  openrouter: 'OPENROUTER_BASE_URL',
-  nvidia: 'NVIDIA_BASE_URL',
-  minimax: 'MINIMAX_BASE_URL',
-  zhipu: 'ZHIPU_BASE_URL',
-  moonshot: 'MOONSHOT_BASE_URL',
-};
+type SupportedProvider = AIProviderId;
 
 export type EmbeddingCredentials = {
   apiKey?: string | null;

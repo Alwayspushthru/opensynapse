@@ -1,17 +1,12 @@
-type ApiKeyProvider = 'gemini' | 'openai' | 'openrouter' | 'nvidia' | 'minimax' | 'zhipu' | 'moonshot';
+import { AI_PROVIDER_IDS, type AIProviderId } from '../lib/aiModels';
+type ApiKeyProvider = AIProviderId;
 
 export interface ProviderApiKeyConfig {
   apiKey: string;
   baseUrl?: string;
 }
 
-export interface UserApiKeys {
-  gemini?: ProviderApiKeyConfig;
-  openai?: ProviderApiKeyConfig;
-  minimax?: ProviderApiKeyConfig;
-  zhipu?: ProviderApiKeyConfig;
-  moonshot?: ProviderApiKeyConfig;
-}
+export type UserApiKeys = Partial<Record<AIProviderId, ProviderApiKeyConfig>>;
 
 async function fetchWithAuth(url: string, options: RequestInit = {}) {
   const response = await fetch(url, {
@@ -34,7 +29,7 @@ export async function getUserApiKeys(): Promise<UserApiKeys | null> {
   try {
     const keys = await fetchWithAuth('/api/api-keys');
     const result: UserApiKeys = {};
-    const providers: ApiKeyProvider[] = ['gemini', 'openai', 'openrouter', 'nvidia', 'minimax', 'zhipu', 'moonshot'];
+    const providers = AI_PROVIDER_IDS;
     
     for (const provider of providers) {
       const key = keys[`${provider}ApiKey`];
@@ -52,8 +47,7 @@ export async function getUserApiKeys(): Promise<UserApiKeys | null> {
 
 export async function saveUserApiKey(
   provider: string,
-  apiKey: string,
-  baseUrl?: string
+  apiKey: string
 ): Promise<void> {
   const trimmedApiKey = apiKey.trim();
   if (!trimmedApiKey) {

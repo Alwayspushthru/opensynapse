@@ -3,7 +3,7 @@
 import { TOOL_REGISTRY, type ToolRunContext, type ToolOutput } from './toolExecutor.js';
 import { toOpenAITools, toGeminiTools } from './toolSchemas.js';
 import { generateContentWithTools, type ToolDefinitionInput } from '../lib/providerGateway.js';
-import { parseModelSelection } from '../lib/aiModels.js';
+import { getApiModelId, parseModelSelection } from '../lib/aiModels.js';
 import { GoogleGenAI } from '@google/genai';
 import type { Response } from 'express';
 
@@ -30,7 +30,7 @@ type InternalToolCall = {
 };
 
 type AgentMessage =
-  | { role: 'user' | 'model'; parts: Array<Record<string, any>> }
+  | { role: 'user' | 'model'; parts: Array<Record<string, any>>; reasoningContent?: string }
   | { role: 'tool'; toolCallId: string; name: string; parts: Array<{ text: string }> };
 
 const MAX_ITERATIONS = 10;
@@ -75,10 +75,11 @@ export async function* runAgentLoop(
       // Add assistant message with tool calls to context
       contextMessages.push({
         role: 'model',
+        reasoningContent: result.thought,
         parts: [
           ...(result.text ? [{ text: result.text }] : []),
           ...result.toolCalls.map(tc => ({
-            functionCall: { name: tc.name, args: tc.arguments },
+            functionCall: { id: tc.id, name: tc.name, args: tc.arguments },
           })),
         ],
       });
@@ -158,7 +159,7 @@ async function callLLMWithTools(params: {
         name: (m as any).name,
       };
     }
-    return { role: m.role, parts: m.parts };
+    return { role: m.role, parts: m.parts, reasoningContent: m.reasoningContent };
   });
 
   const result = await generateContentWithTools({
@@ -170,7 +171,7 @@ async function callLLMWithTools(params: {
 
   return {
     text: result.text,
-    thought: '',
+    thought: result.thought || '',
     toolCalls: result.toolCalls,
   };
 }
@@ -207,7 +208,7 @@ async function callGeminiWithTools(
   }
 
   const response = await client.models.generateContent({
-    model: modelId.includes('/') ? modelId.split('/')[1] : modelId,
+    model: getApiModelId(modelId),
     contents,
     config: {
       systemInstruction: systemInstruction || undefined,
