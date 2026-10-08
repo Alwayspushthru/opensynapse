@@ -127,8 +127,7 @@ cd opensynapse
 # 安装依赖
 npm install
 
-# 启动开发服务器
-npm run dev
+# 接下来按下方“环境配置”和“启动顺序”配置并启动服务
 ```
 
 访问 [http://localhost:3000](http://localhost:3000) 开始使用。
@@ -153,10 +152,7 @@ DATABASE_URL=postgresql://user:password@localhost:5432/opensynapse
 #### AI 提供商配置（至少配置一种）
 
 ```bash
-# 复制环境变量模板
-cp .env.example .env.local
-
-# 编辑 .env.local，添加你想使用的提供商 API Key
+# 继续编辑已有 .env.local，添加你想使用的提供商 API Key
 # 支持以下任意组合：
 GEMINI_API_KEY=your_gemini_key          # Google Gemini
 OPENAI_API_KEY=your_openai_key          # OpenAI
@@ -166,6 +162,28 @@ DEEPSEEK_API_KEY=your_deepseek_key     # 默认，只配置这一家即可使用
 ```
 
 配置完成后，在 Settings 页面或聊天界面切换模型即可使用对应的 AI 提供商。
+
+### 启动顺序（Chroma 默认使用 Docker）
+
+先安装 Docker Engine / Docker Desktop 及 Compose 插件，确认 `docker info` 和 `docker compose version` 可用。完成 `.env.local` 配置、PostgreSQL 启动和数据库迁移后，在项目根目录执行：
+
+```bash
+# .env.local 中设置：CHROMA_URL=http://127.0.0.1:8000
+# 如已有旧 Chroma 容器或卷，先按部署指南检查和备份，再执行下面的启动命令。
+docker compose config --quiet
+docker compose up -d chroma
+docker compose ps chroma
+
+# 使用现有 TypeScript 客户端检查连接，失败时返回非零退出码
+node --env-file=.env.local --import tsx --input-type=module -e 'import { vectorStore } from "./src/vector/chroma.ts"; const result = await vectorStore.healthCheck(); console.log(result); if (!result.healthy) process.exitCode = 1;'
+
+# 心跳成功后启动应用；生产环境继续使用 PM2，见部署指南
+npm run dev
+```
+
+`up -d chroma` 只启动 Chroma，不会启动或重建 Compose 中的 PostgreSQL。Chroma 固定为 `chromadb/chroma:1.5.5`，数据存于 `chroma_data` 命名卷，容器内挂载到 `/data`。应用入口在开发和生产环境均读取根目录 `.env.local`，不会自动加载 `.env.production`。
+
+本机 CLI 是手动备用方式：需先在 Python 3.12 虚拟环境安装 `chromadb==1.5.5`，激活环境后运行 `npm run chroma`，数据保存到项目 `./data/chroma`。两种方式使用相同地址 `http://127.0.0.1:8000`，同一时间只运行一种，数据不会自动同步。安装、切换、旧卷处理和备份恢复见[部署指南](docs/DEPLOYMENT_GUIDE.md#chroma-运维与本机备用)。
 
 ---
 

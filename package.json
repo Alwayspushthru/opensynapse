@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch server.ts",
+    "chroma": "chroma run --path ./data/chroma --port 8000 --host 127.0.0.1",
     "start": "tsx server.ts",
     "build": "vite build",
     "preview": "vite preview",

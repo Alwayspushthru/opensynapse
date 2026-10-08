@@ -1,17 +1,19 @@
 #!/usr/bin/env tsx
 /**
- * Firestore to PostgreSQL Migration Script
+ * Archived: Firestore to PostgreSQL Migration Script
  * 
- * This script migrates data from Firebase Firestore to PostgreSQL.
+ * Historical reference only; migration is complete. Not part of normal setup.
+ * See README.md in this directory before considering reuse.
  * 
  * Prerequisites:
  *   npm install --save-dev firebase-admin
  * 
- * Run with: npx tsx scripts/migrate-firestore-to-postgres.ts
+ * Historical invocation (from project root):
+ *   npx tsx scripts/archive/migrate-firestore-to-postgres.ts
  */
 
-import { db } from '../src/db';
-import { notes, flashcards, chatSessions, chatMessages, apiKeys, customPersonas } from '../src/db/schema';
+import { db } from '../../src/db';
+import { notes, flashcards, chatSessions, chatMessages, apiKeys, customPersonas } from '../../src/db/schema';
 import * as fs from 'fs';
 import * as path from 'path';
 

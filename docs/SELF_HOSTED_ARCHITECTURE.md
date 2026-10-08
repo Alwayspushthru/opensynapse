@@ -68,7 +68,7 @@ This document describes the self-hosted architecture of OpenSynapse after migrat
 - **Location**: `src/vector/chroma.ts`
 - **Technology**: ChromaDB (local embedding storage)
 - **Purpose**: Semantic search for notes
-- **Storage**: Local filesystem (`data/chroma/`)
+- **Storage**: Docker named volume `chroma_data` mounted at `/data` (default); project `./data/chroma` only for the manual local CLI alternative.
 
 ### 4. API Layer
 
@@ -90,7 +90,7 @@ Create a `.env.local` file:
 # Required
 DATABASE_URL=postgresql://user:password@localhost:5432/opensynapse
 JWT_SECRET=your-super-secret-jwt-key-min-32-characters-long
-CHROMA_PATH=./data/chroma
+CHROMA_URL=http://127.0.0.1:8000
 
 # Optional - AI Provider API Keys (global fallbacks)
 GEMINI_API_KEY=your_gemini_key
@@ -137,7 +137,20 @@ npx drizzle-kit migrate
 
 ### 4. Setup ChromaDB
 
-The ChromaDB will be automatically initialized on first run. Data is stored in `data/chroma/`.
+Chroma runs as a separate HTTP service. The application uses `ChromaClient` and may create collections on demand, but does not start a Chroma server. From the project root, after configuring `.env.local`:
+
+```bash
+# Inspect and back up existing Chroma data before changing an old mount.
+docker compose up -d chroma
+docker compose ps chroma
+node --env-file=.env.local --import tsx --input-type=module -e 'import { vectorStore } from "./src/vector/chroma.ts"; const result = await vectorStore.healthCheck(); console.log(result); if (!result.healthy) process.exitCode = 1;'
+```
+
+Docker uses `chromadb/chroma:1.5.5`, persisting to the `chroma_data` named volume at `/data`. This command only starts Chroma; an existing PostgreSQL installation is unaffected. The port is bound to `127.0.0.1:8000` for the host application managed by PM2.
+
+For the manual alternative, install `chromadb==1.5.5` in a Python 3.12 virtual environment, activate it, and run `npm run chroma` from the project root. This stores data in `./data/chroma`. Both modes use `CHROMA_URL=http://127.0.0.1:8000`; stop one before starting the other. Their data is independent, with no automatic switching or synchronization. `CHROMA_PATH`, if used as a legacy alias, must also be an HTTP URL, never a filesystem path.
+
+The server explicitly loads `.env.local` in both development and production. See the [deployment guide](DEPLOYMENT_GUIDE.md#chroma-运维与本机备用) for installation, old-volume inspection, backup, and restore.
 
 ### 5. Start the Server
 
@@ -149,15 +162,7 @@ The application will be available at `http://localhost:3000`.
 
 ## Data Migration from Firebase
 
-If you have existing data in Firebase, use the migration script:
-
-```bash
-# Set the path to your Firebase service account key
-export FIREBASE_SERVICE_ACCOUNT_KEY_PATH=/path/to/serviceAccountKey.json
-
-# Run the migration
-npx tsx scripts/migrate-firestore-to-postgres.ts
-```
+Firebase migration is complete. The former migration tool is retained in [scripts/archive](../scripts/archive/README.md) for historical reference and is excluded from daily type checking. It is not part of the current setup or deployment process.
 
 ## API Endpoints
 
@@ -228,9 +233,10 @@ OpenSynapse/
 │           ├── LoginSelection.tsx
 │           └── AuthCallback.tsx
 ├── scripts/
-│   └── migrate-firestore-to-postgres.ts
+│   └── archive/                 # Historical tools, excluded from daily type checking
+│       └── migrate-firestore-to-postgres.ts
 ├── data/                        # Local data storage
-│   └── chroma/                  # ChromaDB data
+│   └── chroma/                  # Manual local CLI data only (Docker uses a named volume)
 └── .env.local                   # Environment variables
 ```
 
@@ -268,9 +274,12 @@ psql $DATABASE_URL -c "SELECT 1"
 ### ChromaDB Issues
 
 ```bash
-# Clear ChromaDB data (warning: deletes all embeddings)
-rm -rf data/chroma/*
+# Inspect the default Docker service without deleting data
+docker compose ps chroma
+docker compose logs --tail=100 chroma
 ```
+
+Chroma unavailability retains the existing keyword-only RAG fallback. PostgreSQL must still be available. Do not delete data as a troubleshooting step; see the deployment guide for backups.
 
 ### Authentication Issues
 
@@ -280,7 +289,7 @@ rm -rf data/chroma/*
 
 ## Migration from Firebase
 
-See the migration script at `scripts/migrate-firestore-to-postgres.ts` for details on migrating existing Firebase data.
+See the [archive notes](../scripts/archive/README.md) for the historical migration tool and requirements for any future reuse.
 
 ## License
 

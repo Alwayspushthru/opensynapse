@@ -17,15 +17,27 @@ services:
       retries: 5
 
   chroma:
-    image: chromadb/chroma:latest
+    image: chromadb/chroma:1.5.5
     container_name: opensynapse-chroma
+    restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
-      - chroma_data:/chroma/chroma
-    environment:
-      - IS_PERSISTENT=TRUE
-      - PERSIST_DIRECTORY=/chroma/chroma
+      # 1.5.5 /config.yaml sets persist_path: /data.
+      # Inspect and back up existing data before changing an old mount.
+      - chroma_data:/data
+    healthcheck:
+      # Verified in 1.5.5: bash is available; curl and Python are absent.
+      # Check the HTTP status, not just whether the TCP port accepts connections.
+      test:
+        - CMD
+        - /bin/bash
+        - -ec
+        - 'exec 3<>/dev/tcp/127.0.0.1/8000; printf "GET /api/v2/heartbeat HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n" >&3; IFS= read -r -t 3 status <&3; [[ "$$status" == HTTP/*\ 200\ * ]]'
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
 volumes:
   postgres_data:

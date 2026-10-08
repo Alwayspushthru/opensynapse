@@ -2,7 +2,7 @@
 
 ## 概述
 
-本文档记录将 OpenSynapse 部署到阿里云 ECS 的完整流程。由于中国大陆网络限制，本指南使用替代方案（APT 替代 Docker、rsync 替代 git clone）。
+本文档记录将 OpenSynapse 部署到阿里云 ECS 的完整流程。PostgreSQL 沿用 APT 安装，Node.js 应用继续由 PM2 管理。Chroma 默认使用 Docker Compose，本机 CLI 仅作为手动备用方式；代码可用 rsync 上传。
 
 ## 前置条件
 
@@ -45,7 +45,7 @@ pm2 --version
 
 ### 1.4 安装 PostgreSQL
 
-由于 Docker Hub 被墙，使用 APT 直接安装：
+PostgreSQL 使用 APT 直接安装，Chroma 的 Compose 启动不会影响此数据库：
 
 ```bash
 # 添加 PostgreSQL 官方源
@@ -177,7 +177,9 @@ ls -la dist/
 
 ```bash
 cd /www/wwwroot/opensynapse
-nano .env.production
+# 首次部署才复制模板，已有配置不要覆盖
+cp -n .env.example .env.local
+nano .env.local
 ```
 
 **填入以下内容：**
@@ -203,27 +205,33 @@ DISCORD_CLIENT_SECRET=your_discord_client_secret
 GEMINI_API_KEY=your_gemini_api_key
 OPENAI_API_KEY=your_openai_api_key
 
+# Chroma（Docker 和本机备用共用同一地址）
+CHROMA_URL=http://127.0.0.1:8000
+
 # 其他配置
 NODE_ENV=production
 PORT=3000
 ```
 
-### 4.2 修复 PM2 配置模块问题
+`server.ts` 明确读取当前工作目录的 `.env.local`，生产环境也一样。仅填写 `.env.production` 不会生效。系统或 PM2 已注入的同名环境变量优先于 dotenv 文件，修改配置后应检查是否有旧值覆盖并重启应用。
 
-由于 package.json 使用 `"type": "module"`，需要将 PM2 配置改为 CommonJS 格式：
+### 4.2 创建 PM2 配置
+
+由于 package.json 使用 `"type": "module"`，使用 CommonJS 配置文件。若已有配置，保留现有参数并核对 `cwd`：
 
 ```bash
 cd /www/wwwroot/opensynapse
-mv ecosystem.config.js ecosystem.config.cjs
+nano ecosystem.config.cjs
 ```
 
-**验证 ecosystem.config.cjs 内容：**
+**首次创建时可使用以下 ecosystem.config.cjs 内容：**
 
 ```javascript
 module.exports = {
   apps: [
     {
       name: 'opensynapse',
+      cwd: '/www/wwwroot/opensynapse',
       script: 'server.ts',
       interpreter: 'tsx',
       instances: 1,
@@ -246,7 +254,30 @@ module.exports = {
 
 ## 第五步：启动应用
 
-### 5.1 使用 PM2 启动
+### 5.1 先启动 Chroma（Docker 默认）
+
+安装 [Docker Engine 和 Compose 插件](https://docs.docker.com/engine/install/ubuntu/)，启动 Docker 服务，确认下面两条命令成功：
+
+```bash
+docker info
+docker compose version
+```
+
+已有旧 Chroma 容器或卷时，先完成下文“旧容器和旧卷检查”，不要直接重建。
+
+```bash
+cd /www/wwwroot/opensynapse
+docker compose config --quiet
+docker compose up -d chroma
+docker compose ps chroma
+
+# 在宿主机用现有客户端验证心跳；Node.js 20.6+，需已 npm install
+node --env-file=.env.local --import tsx --input-type=module -e 'import { vectorStore } from "./src/vector/chroma.ts"; const result = await vectorStore.healthCheck(); console.log(result); if (!result.healthy) process.exitCode = 1;'
+```
+
+只指定 `chroma`，不会启动或更改 Compose 中的 PostgreSQL。等待容器变为 `healthy` 且客户端返回 `healthy: true`，再启动应用。不要用无服务名的 `docker compose up -d` 替代此命令。
+
+### 5.2 使用 PM2 启动
 
 ```bash
 cd /www/wwwroot/opensynapse
@@ -259,7 +290,7 @@ pm2 save
 pm2 startup systemd
 ```
 
-### 5.2 检查运行状态
+### 5.3 检查运行状态
 
 ```bash
 # 查看进程状态
@@ -326,7 +357,7 @@ netstat -tlnp | grep 3000
 ```
 
 **问题 2：模块错误**
-- 确保已执行 `mv ecosystem.config.js ecosystem.config.cjs`
+- 确保 PM2 使用 CommonJS 配置 `ecosystem.config.cjs`，且 `cwd` 指向项目根目录
 
 **问题 3：数据库连接失败**
 ```bash
@@ -381,22 +412,9 @@ apt-get install -y certbot python3-certbot-nginx
 certbot --nginx -d your-domain.com
 ```
 
-### 8.3 配置 Chroma 向量数据库（可选）
+### 8.3 Chroma 运维
 
-如需知识图谱和 RAG 功能：
-
-```bash
-# 安装 Chroma（使用 pip，Docker 被墙）
-pip install chromadb
-
-# 启动 Chroma 服务
-chroma run --path /www/chroma_data --port 8000
-```
-
-然后在 `.env.production` 添加：
-```env
-CHROMA_URL=http://localhost:8000
-```
+见下文“Chroma 运维与本机备用”，包括持久化、备份恢复和手动切换。
 
 ---
 
@@ -551,10 +569,146 @@ ssh -i opennew.pem root@101.133.166.67 "pm2 restart opensynapse"
 ## 已知限制
 
 1. **GitHub 访问**: 中国大陆服务器无法直接访问 GitHub，使用 rsync 上传代码
-2. **Docker Hub**: 被墙，使用 APT 安装 PostgreSQL 而非 Docker
+2. **Docker Hub**: 服务器需能拉取固定 Chroma 镜像；无法访问时可手动使用下述本机 CLI 备用方式。PostgreSQL 沿用 APT 安装。
 3. **API 访问**: 如需使用 AI 功能，确保 API 密钥可用（Gemini/OpenAI 等）
-4. **Chroma**: 向量数据库使用本地安装而非 Docker
+4. **Chroma**: 默认 Docker，本机 CLI 手动备用；两者不同时运行，数据不自动同步。
 
 ---
 
-**最后更新**: 2026-03-30
+**最后更新**: 2026-10-08
+
+## Chroma 运维与本机备用
+
+### 固定版本与数据位置
+
+| 方式 | 数据位置 | 应用地址 |
+| --- | --- | --- |
+| Docker（默认，`chromadb/chroma:1.5.5`） | `chroma_data` 命名卷，容器内 `/data` | `http://127.0.0.1:8000` |
+| 本机 CLI（手动备用，`chromadb==1.5.5`） | 项目 `./data/chroma` | `http://127.0.0.1:8000` |
+
+Compose 保留逻辑卷名 `chroma_data`，实际名称通常为 `<Compose 项目名>_chroma_data`。保持原项目目录和 Compose 项目名，否则可能创建一个新卷，看起来像数据丢失。`CHROMA_URL` 只配置客户端连接地址，不决定服务器数据位置。
+
+[官方迁移说明](https://docs.trychroma.com/updates/migration)指出新版容器默认目录从 `/chroma/chroma` 改为 `/data`。本配置使用 1.5.5 镜像自带 `/config.yaml` 的 `persist_path: /data`，移除旧 `IS_PERSISTENT`、`PERSIST_DIRECTORY`。镜像版本是服务端版本，npm `chromadb` 是独立版本的 TypeScript 客户端，二者无需版本号相同。
+
+镜像实测含 `/bin/bash`，不含 `curl`、Python 或 `wget`。Compose 健康检查用 Bash TCP 连接请求 `/api/v2/heartbeat` 并验证 HTTP 200，而非仅检查端口。Docker 的 `timeout` 限制整个探测时间。`restart: unless-stopped` 用于进程退出和主机重启后的恢复；它不会因为 `unhealthy` 状态自动重启容器，手动停止后也不会自动启动。
+
+### 旧容器和旧卷检查（首次应用新配置前）
+
+先保留旧 Compose 配置，并检查现存资源；以下命令不修改数据：
+
+```bash
+docker ps -a --filter name=opensynapse-chroma
+docker volume ls --filter label=com.docker.compose.volume=chroma_data
+# 容器存在时执行；记录旧镜像标记、镜像 ID、实际卷名和挂载目标
+docker inspect opensynapse-chroma --format '{{.Config.Image}} {{.Image}} {{json .Mounts}}'
+# 正在运行时，检查真实配置和数据文件，不要只看卷是否存在
+docker exec opensynapse-chroma /bin/sh -c 'cat /config.yaml 2>/dev/null; ls -la /data /chroma/chroma 2>/dev/null'
+```
+
+只有卷、没有容器时，用实际卷名替换下方占位符，先确认卷存在，再以只读方式检查卷根目录。`docker volume inspect` 失败时不要继续，避免误创建空卷：
+
+```bash
+docker volume inspect 实际旧卷名
+docker run --rm --entrypoint /bin/sh \
+  --mount type=volume,src=实际旧卷名,dst=/inspect,readonly \
+  chromadb/chroma:1.5.5 -c 'ls -la /inspect'
+```
+
+如果旧卷已有数据，先核对原版本、配置、`chroma.sqlite3` 和索引目录的实际位置，并停止写入后备份。旧容器可能挂载 `/chroma/chroma`，但真实数据位于未挂载的 `/data`；此时必须在删除或重建旧容器前复制 `/data`。不确定时同时备份两个目录，并保留原镜像和容器。不要因为旧卷为空就认定没有数据。
+
+目录调整不等于数据库格式迁移。先在旧数据的副本上按原版本到目标版本的官方迁移说明验证，再调整生产挂载。不要直接把较新版本数据交给较旧镜像，也不要直接对唯一数据副本试升级。回滚应恢复升级前备份并使用原镜像。本文不会自动修改或迁移已有卷。
+
+### 日志、停止与重建
+
+```bash
+docker compose logs --tail=100 -f chroma
+docker compose restart chroma
+docker compose stop chroma
+docker compose up -d chroma
+# 仅在已备份并确认版本、卷和路径正确后重建
+docker compose up -d --force-recreate chroma
+```
+
+容器重建会丢弃容器可写层，但同一个命名卷会重新挂载，卷内数据保留。`docker compose down` 默认保留命名卷，但会停止整个项目的服务，日常操作请使用上述仅针对 Chroma 的命令。`docker compose down -v` 或删除 `chroma_data` 实际卷会清除向量数据；`down -v` 还可能删除 Compose 中的 PostgreSQL 卷，不能作为重启命令。
+
+### 备份（停写后的完整目录）
+
+以下适用于已确认使用 `/data` 的默认 Docker 部署。旧版本请先核对路径并替换。停止应用和 Chroma，避免 SQLite 与索引文件复制时不一致；命令均在项目根目录执行：
+
+```bash
+pm2 stop opensynapse
+docker compose stop chroma
+CHROMA_BACKUP_DIR="$HOME/opensynapse-backups/chroma-$(date +%Y%m%d-%H%M%S)"
+mkdir -p "$CHROMA_BACKUP_DIR/data"
+chmod 700 "$CHROMA_BACKUP_DIR"
+docker inspect opensynapse-chroma --format '{{.Config.Image}} {{.Image}} {{json .Mounts}}' > "$CHROMA_BACKUP_DIR/source.txt"
+# docker cp 支持已停止的容器；复制数据库与全部索引，不只复制 sqlite 文件
+docker cp -a opensynapse-chroma:/data/. "$CHROMA_BACKUP_DIR/data/"
+ls -la "$CHROMA_BACKUP_DIR/data"
+docker compose up -d chroma
+# 确认 healthy 后恢复应用
+pm2 restart opensynapse --update-env
+```
+
+检查复制命令成功、备份包含预期文件，再恢复服务。备份目录含用户内容，应保存到受控的项目外存储，不提交 Git；备份还应定期做恢复验证。备份向量库不替代 PostgreSQL 备份，完整恢复需要配套的笔记数据。
+
+### 恢复（只向空目标卷恢复）
+
+先停止 PM2 和 Chroma，并保留当前卷作为回滚副本。使用与备份一致的镜像版本；如果现有目标卷非空，不要覆盖或混合文件，先由操作者另选一个空命名卷，在临时 Compose override 中让 `chroma_data.name` 指向该卷，再创建容器。后续所有 Compose 命令必须使用相同 override。
+
+对于确认为空的默认目标卷：
+
+```bash
+# 创建但不启动容器，确保恢复前服务不会生成数据库文件
+docker compose create chroma
+# 检查挂载，确认容器确实使用预期的空目标卷
+docker inspect opensynapse-chroma --format '{{json .Mounts}}'
+# 用上一步得到的实际卷名检查目录；必须为空才继续
+# docker run --rm --entrypoint /bin/sh --mount type=volume,src=实际目标卷名,dst=/inspect,readonly chromadb/chroma:1.5.5 -c 'ls -la /inspect'
+CHROMA_BACKUP_DIR=/绝对路径/到/已验证的备份
+docker cp -a "$CHROMA_BACKUP_DIR/data/." opensynapse-chroma:/data/
+docker compose up -d chroma
+docker compose ps chroma
+node --env-file=.env.local --import tsx --input-type=module -e 'import { vectorStore } from "./src/vector/chroma.ts"; const result = await vectorStore.healthCheck(); console.log(result); if (!result.healthy) process.exitCode = 1;'
+```
+
+心跳成功只证明服务可访问；还应核对集合数量并抽查已知笔记的向量查询结果，再恢复 PM2 应用。
+
+### 本机 CLI 手动备用
+
+`npm install` 只安装 TypeScript 客户端，不会安装 `chroma` 服务端命令。推荐 Python 3.12 和独立虚拟环境，固定与 Docker 相同的服务端版本。Ubuntu 24.04 可先执行 `sudo apt-get install python3.12-venv`；其他系统先安装 Python 3.12。
+
+```bash
+cd /www/wwwroot/opensynapse
+# 虚拟环境放在项目外，避免混入部署文件
+python3.12 -m venv "$HOME/.venvs/opensynapse-chroma"
+source "$HOME/.venvs/opensynapse-chroma/bin/activate"
+python -m pip install 'chromadb==1.5.5'
+# 用 Python 包元数据核对版本；CLI 自报版本可能与发行包号不同
+python -c 'import importlib.metadata; print(importlib.metadata.version("chromadb"))'
+
+# 停止 Docker 方式，释放 8000 端口
+docker compose stop chroma
+# 在项目根目录执行，前台运行；保持此终端开启
+npm run chroma
+```
+
+该命令明确使用 `--path ./data/chroma --port 8000 --host 127.0.0.1`。另开终端执行前文客户端心跳命令，再启动或继续使用 PM2 应用。本机方式不自动启动、不自动由 PM2 托管；关闭该进程后服务停止。首次使用为空库，不会读取 Docker 命名卷。
+
+切回 Docker：在 CLI 终端按 Ctrl+C，确认端口释放，再运行 `docker compose up -d chroma` 并检查心跳。两种方式的连接配置相同，但持久化位置独立，不会自动切换后端或同步数据。如需迁移数据，应停写、备份，并在相同版本的空目标目录中单独恢复完整目录。本机方式备份时先停止 CLI，再完整复制 `./data/chroma`；恢复也须在 CLI 停止、目标目录为空时进行，并保留文件权限。
+
+Chroma 停止后，应用保留现有关键词检索降级逻辑，笔记同步会跳过不可用的向量库；PostgreSQL 仍须正常运行。恢复 Chroma 不会自动补齐停服期间缺失的向量，本次不增加同步机制。
+
+
+### 本次兼容性验证记录（2026-10-08）
+
+在 macOS ARM64、Docker Desktop Linux ARM64 上，使用仓库已安装的 TypeScript `chromadb@3.4.0` 和 `chromadb/chroma:1.5.5` 实测。拉取的镜像摘要为 `sha256:0771874eaffc80fb4a66ba4de41a8fadf0447240b08d92353450e26ee43c9355`。本机 CLI 使用 Python 3.12.13 和 [官方 `chromadb==1.5.5` 包](https://pypi.org/project/chromadb/1.5.5/)。
+
+- Compose 配置校验通过；隔离 Compose 项目仅启动 Chroma，健康检查返回 `healthy`。
+- 现有 `vectorStore` 心跳、添加、批量 upsert、查询、元数据过滤、更新和删除通过，测试显式提供三维向量，不调用外部 embedding API。
+- 隔离命名卷写入后强制重建容器，原数据仍可查询；停服复制完整 `/data`，恢复到另一空卷后亦可查询。
+- 临时目录复用原 `npm run chroma` 脚本，确认生成 `./data/chroma/chroma.sqlite3` 和索引目录，停止并重启 CLI 后原数据仍可查询。未操作项目已有 `data/chroma`。
+- 真实 Chroma 停止后，运行现有 `hybridSearch` 返回 `sources: ['keyword']`。此项仅将 PostgreSQL repository 查询替换为内存笔记，不是登录态与真实数据库的端到端测试。
+- 测试容器、卷、网络和本机服务已清理或停止；原 PostgreSQL 未改动。生产 Ubuntu 主机尚未部署验证，部署时仍需检查心跳。
+
+客户端会提示缺少默认 embedding function 包，但显式传入向量的上述操作成功；本次保留现有业务逻辑。首次执行 `npm run lint` 时，历史 Firebase 迁移脚本因缺少 `firebase-admin` 阻塞检查；后续已将该脚本移至 `scripts/archive`，排除在日常类型检查之外，重新执行 `npm run lint` 通过。详见[归档说明](../scripts/archive/README.md)。

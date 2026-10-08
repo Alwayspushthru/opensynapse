@@ -54,7 +54,7 @@ npm run build
 
 契约测试使用模拟上游，不消耗 API 额度。真实验收需在填写 DeepSeek Key 后检查：流式对话及思考显示、停止后再发送、重新生成、图片输入、笔记/闪卡提炼、Agent 工具调用，以及缺少 Embedding Key 时普通聊天仍可使用。
 
-如果完整类型检查报告 `scripts/migrate-firestore-to-postgres.ts` 无法找到 `firebase-admin/app` 或 `firebase-admin/firestore`，这是历史迁移脚本的可选依赖未安装；本次接入不使用 Firebase，也不为此重新引入该依赖。
+历史 Firebase 迁移工具已移至 `scripts/archive` 并排除在日常类型检查之外，详见[归档说明](../scripts/archive/README.md)。当前运行和类型检查不需要为此安装 `firebase-admin`。
 
 ## 官方来源
 
